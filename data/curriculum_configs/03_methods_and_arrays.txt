@@ -1,0 +1,58 @@
+# Stage 3: Methods, Arrays, Strings — full coverage
+# Method basics
+How do you define a public static method named square that takes an int and returns its square?
+How do you define a public static method named max that returns the larger of two ints?
+How do you define a void method named greet that prints Hello followed by a name?
+How do you define a method that returns true if a number is even?
+How do you define a boolean method named contains that checks if an array has a target value?
+How do you define a method that takes no arguments and returns a random int between 1 and 10?
+How do you call a static method from another class in Java?
+# Return values
+How do you return multiple values from a method in Java using an array?
+How do you return early from a void method using return in Java?
+What happens if a non-void method does not return a value in Java?
+# Method overloading
+How do you demonstrate method overloading with two add methods one for int and one for double?
+How do you overload a print method to handle both String and int arguments?
+# Recursion
+How do you write a recursive method to compute factorial of n?
+How do you write a recursive method to compute the nth Fibonacci number?
+How do you write a recursive method to compute the sum of digits of a number?
+How do you write a recursive method to reverse a String?
+How do you identify the base case in a recursive method?
+What is a stack overflow and how does recursion cause it?
+# Varargs
+How do you define a varargs method in Java that returns the sum of any number of ints?
+How do you call a varargs method with three arguments in Java?
+# Arrays fundamentals
+How do you declare an int array of size 5 in Java?
+How do you declare and initialize an int array with values 10 20 30 40 50?
+How do you access the third element of an array in Java?
+How do you get the length of an array named data in Java?
+How do you iterate over an array using a for loop in Java?
+How do you iterate over an array using a for-each loop in Java?
+# Array operations
+How do you find the sum of all elements in an int array?
+How do you find the maximum value in an int array?
+How do you find the minimum value in an int array?
+How do you count how many times a given value appears in an array?
+How do you reverse an int array in place without using a second array?
+How do you check if two int arrays are equal element by element?
+How do you copy an array into a new array in Java?
+How do you sort an array in Java using Arrays.sort?
+How do you do a binary search on a sorted array using Arrays.binarySearch?
+How do you fill an entire array with the value 0 using Arrays.fill?
+# 2D arrays
+How do you declare a 2D int array with 3 rows and 3 columns in Java?
+How do you initialize a 2D array with values in Java?
+How do you iterate over a 2D array using nested loops in Java?
+How do you find the sum of all elements in a 2D array?
+How do you print a 2D array as a grid in Java?
+# String methods
+How do you check if a String is empty in Java?
+How do you check if a String is null or empty in Java?
+How do you count the number of times a character appears in a String?
+How do you check if a String is a palindrome in Java?
+How do you remove all spaces from a String in Java?
+How do you convert a String to a char array in Java?
+How do you join an array of strings with a comma separator in Java?

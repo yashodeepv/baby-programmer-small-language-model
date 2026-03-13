@@ -1,0 +1,548 @@
+USER: How do you print Hello World in Java?
+ASSISTANT: System.out.println("Hello World");
+
+USER: How do you declare an int variable named score with value 100?
+ASSISTANT: int score = 100;
+
+USER: How do you declare a double named price set to 9.99?
+ASSISTANT: double price = 9.99;
+
+USER: How do you declare a String named name set to Alice?
+ASSISTANT: String name = "Alice";
+
+USER: How do you declare a boolean named isActive set to true?
+ASSISTANT: boolean isActive = true;
+
+USER: How do you declare a char named grade set to A?
+ASSISTANT: char grade = 'A';
+
+USER: How do you declare a long named population?
+ASSISTANT: long population = 0L;
+
+USER: How do you declare a float named temperature?
+ASSISTANT: float temperature = 0.0f;
+
+USER: How do you declare a byte named level?
+ASSISTANT: byte level = 0;
+
+USER: How do you declare a short named count?
+ASSISTANT: short count = 0;
+
+USER: How do you concatenate two strings in Java?
+ASSISTANT: String result = "Hello" + " " + "World";
+
+USER: How do you find the length of a String?
+ASSISTANT: int len = name.length();
+
+USER: How do you convert a String to uppercase?
+ASSISTANT: String upper = name.toUpperCase();
+
+USER: How do you convert a String to lowercase?
+ASSISTANT: String lower = name.toLowerCase();
+
+USER: How do you check if a String contains a substring?
+ASSISTANT: boolean found = name.contains("Ali");
+
+USER: How do you check if two Strings are equal in Java?
+ASSISTANT: boolean eq = name.equals("Alice");
+
+USER: What is the difference between == and equals for Strings?
+ASSISTANT: == compares references (memory address). equals() compares the actual character content. Always use equals() to compare String values.
+
+USER: How do you get a character at index 2 from a String?
+ASSISTANT: char c = name.charAt(2);
+
+USER: How do you convert an int to a String?
+ASSISTANT: String s = String.valueOf(42);
+
+USER: How do you convert a String to an int?
+ASSISTANT: int n = Integer.parseInt("42");
+
+USER: How do you convert a String to a double?
+ASSISTANT: double d = Double.parseDouble("3.14");
+
+USER: How do you declare a final constant in Java?
+ASSISTANT: final int MAX_SIZE = 100;
+
+USER: How do you use the modulo operator to check if a number is even?
+ASSISTANT: if (n % 2 == 0) { System.out.println("even"); }
+
+USER: How do you increment a variable by 1 in Java?
+ASSISTANT: count++;
+
+USER: How do you decrement a variable by 1 in Java?
+ASSISTANT: count--;
+
+USER: How do you add 5 to a variable named total?
+ASSISTANT: total += 5;
+
+USER: How do you calculate the absolute value of a number?
+ASSISTANT: int abs = Math.abs(-10);
+
+USER: How do you find the maximum of two numbers?
+ASSISTANT: int max = Math.max(a, b);
+
+USER: How do you find the minimum of two numbers?
+ASSISTANT: int min = Math.min(a, b);
+
+USER: How do you compute the square root of a number?
+ASSISTANT: double root = Math.sqrt(25.0);
+
+USER: How do you raise a number to a power?
+ASSISTANT: double result = Math.pow(2, 10);
+
+USER: How do you round a double to the nearest integer?
+ASSISTANT: long rounded = Math.round(3.7);
+
+USER: What is integer division in Java?
+ASSISTANT: int result = 7 / 2; // result is 3, not 3.5. To get decimal: double result = 7.0 / 2;
+
+USER: How do you cast a double to an int?
+ASSISTANT: int n = (int) 3.99; // n is 3, the decimal is truncated
+
+USER: How do you cast an int to a double?
+ASSISTANT: double d = (double) 7 / 2; // d is 3.5
+
+USER: How do you write an if statement in Java?
+ASSISTANT: if (age >= 18) { System.out.println("Adult"); }
+
+USER: How do you write an if-else statement in Java?
+ASSISTANT: if (age >= 18) { System.out.println("Adult"); } else { System.out.println("Minor"); }
+
+USER: How do you write an if-else-if chain for letter grades?
+ASSISTANT: if (score >= 90) { grade = 'A'; } else if (score >= 80) { grade = 'B'; } else if (score >= 70) { grade = 'C'; } else { grade = 'F'; }
+
+USER: How do you write a ternary operator in Java?
+ASSISTANT: String result = (score >= 60) ? "Pass" : "Fail";
+
+USER: How do you write a switch statement for days of the week?
+ASSISTANT: switch (day) { case 1: System.out.println("Monday"); break; case 2: System.out.println("Tuesday"); break; default: System.out.println("Other"); }
+
+USER: How do you write a for loop from 1 to 10?
+ASSISTANT: for (int i = 1; i <= 10; i++) { System.out.println(i); }
+
+USER: How do you write a for loop from 10 down to 1?
+ASSISTANT: for (int i = 10; i >= 1; i--) { System.out.println(i); }
+
+USER: How do you write a while loop?
+ASSISTANT: int count = 0; while (count < 10) { System.out.println(count); count++; }
+
+USER: How do you write a do-while loop?
+ASSISTANT: int n; do { n = scanner.nextInt(); } while (n <= 0);
+
+USER: How do you use break in a loop?
+ASSISTANT: for (int i = 0; i < 100; i++) { if (i % 7 == 0 && i > 0) { System.out.println(i); break; } }
+
+USER: How do you use continue in a loop to skip even numbers?
+ASSISTANT: for (int i = 1; i <= 20; i++) { if (i % 2 == 0) continue; System.out.println(i); }
+
+USER: How do you calculate the sum of numbers from 1 to 100?
+ASSISTANT: int sum = 0; for (int i = 1; i <= 100; i++) { sum += i; } System.out.println(sum);
+
+USER: How do you find the factorial of n iteratively?
+ASSISTANT: int factorial = 1; for (int i = 1; i <= n; i++) { factorial *= i; }
+
+USER: How do you write a nested loop to print a multiplication table?
+ASSISTANT: for (int i = 1; i <= 3; i++) { for (int j = 1; j <= 3; j++) { System.out.print(i * j + " "); } System.out.println(); }
+
+USER: How do you write a for-each loop over a String array?
+ASSISTANT: String[] names = {"Alice", "Bob", "Carol"}; for (String name : names) { System.out.println(name); }
+
+USER: How do you define a method that returns the square of an int?
+ASSISTANT: public static int square(int n) { return n * n; }
+
+USER: How do you define a method that returns the maximum of two ints?
+ASSISTANT: public static int max(int a, int b) { return (a > b) ? a : b; }
+
+USER: How do you define a void method that prints a greeting?
+ASSISTANT: public static void greet(String name) { System.out.println("Hello, " + name + "!"); }
+
+USER: How do you define a recursive method for factorial?
+ASSISTANT: public static int factorial(int n) { if (n <= 1) return 1; return n * factorial(n - 1); }
+
+USER: How do you define a recursive Fibonacci method?
+ASSISTANT: public static int fibonacci(int n) { if (n <= 1) return n; return fibonacci(n - 1) + fibonacci(n - 2); }
+
+USER: How do you define a method to check if a number is prime?
+ASSISTANT: public static boolean isPrime(int n) { if (n < 2) return false; for (int i = 2; i <= Math.sqrt(n); i++) { if (n % i == 0) return false; } return true; }
+
+USER: How do you define a method to check if a string is a palindrome?
+ASSISTANT: public static boolean isPalindrome(String s) { String r = new StringBuilder(s).reverse().toString(); return s.equalsIgnoreCase(r); }
+
+USER: How do you demonstrate method overloading?
+ASSISTANT: public static int add(int a, int b) { return a + b; } public static double add(double a, double b) { return a + b; }
+
+USER: How do you use varargs in Java?
+ASSISTANT: public static int sum(int... nums) { int total = 0; for (int n : nums) total += n; return total; }
+
+USER: How do you reverse a string in Java?
+ASSISTANT: String reversed = new StringBuilder(str).reverse().toString();
+
+USER: How do you declare an int array of size 5?
+ASSISTANT: int[] arr = new int[5];
+
+USER: How do you declare and initialize an int array?
+ASSISTANT: int[] arr = {10, 20, 30, 40, 50};
+
+USER: How do you access the third element of an array?
+ASSISTANT: int val = arr[2];
+
+USER: How do you get the length of an array?
+ASSISTANT: int len = arr.length;
+
+USER: How do you iterate over an array with a for loop?
+ASSISTANT: for (int i = 0; i < arr.length; i++) { System.out.println(arr[i]); }
+
+USER: How do you find the sum of an int array?
+ASSISTANT: int sum = 0; for (int x : arr) { sum += x; }
+
+USER: How do you find the maximum value in an array?
+ASSISTANT: int max = arr[0]; for (int i = 1; i < arr.length; i++) { if (arr[i] > max) max = arr[i]; }
+
+USER: How do you find the minimum value in an array?
+ASSISTANT: int min = arr[0]; for (int i = 1; i < arr.length; i++) { if (arr[i] < min) min = arr[i]; }
+
+USER: How do you check if an array contains the value 7?
+ASSISTANT: boolean found = false; for (int x : arr) { if (x == 7) { found = true; break; } }
+
+USER: How do you reverse an array in place?
+ASSISTANT: for (int i = 0; i < arr.length / 2; i++) { int temp = arr[i]; arr[i] = arr[arr.length - 1 - i]; arr[arr.length - 1 - i] = temp; }
+
+USER: How do you sort an array in Java?
+ASSISTANT: import java.util.Arrays; Arrays.sort(arr);
+
+USER: How do you copy an array in Java?
+ASSISTANT: int[] copy = Arrays.copyOf(arr, arr.length);
+
+USER: How do you swap two integers using a temp variable?
+ASSISTANT: int temp = x; x = y; y = temp;
+
+USER: How do you declare a 2D array in Java?
+ASSISTANT: int[][] matrix = new int[3][3];
+
+USER: How do you initialize a 2D array with values?
+ASSISTANT: int[][] matrix = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+
+USER: How do you iterate over a 2D array?
+ASSISTANT: for (int i = 0; i < matrix.length; i++) { for (int j = 0; j < matrix[i].length; j++) { System.out.print(matrix[i][j] + " "); } System.out.println(); }
+
+USER: How do you write a bubble sort in Java?
+ASSISTANT: for (int i = 0; i < arr.length - 1; i++) { for (int j = 0; j < arr.length - 1 - i; j++) { if (arr[j] > arr[j + 1]) { int temp = arr[j]; arr[j] = arr[j + 1]; arr[j + 1] = temp; } } }
+
+USER: How do you write a selection sort in Java?
+ASSISTANT: for (int i = 0; i < arr.length - 1; i++) { int minIdx = i; for (int j = i + 1; j < arr.length; j++) { if (arr[j] < arr[minIdx]) minIdx = j; } int temp = arr[minIdx]; arr[minIdx] = arr[i]; arr[i] = temp; }
+
+USER: How do you write a binary search in Java?
+ASSISTANT: public static int binarySearch(int[] arr, int target) { int left = 0, right = arr.length - 1; while (left <= right) { int mid = left + (right - left) / 2; if (arr[mid] == target) return mid; if (arr[mid] < target) left = mid + 1; else right = mid - 1; } return -1; }
+
+USER: How do you write a linear search in Java?
+ASSISTANT: public static int linearSearch(int[] arr, int target) { for (int i = 0; i < arr.length; i++) { if (arr[i] == target) return i; } return -1; }
+
+USER: How do you write a simple Java class?
+ASSISTANT: public class Dog { private String name; public Dog(String name) { this.name = name; } public String getName() { return name; } }
+
+USER: How do you define a class with a constructor?
+ASSISTANT: public class Person { private String name; private int age; public Person(String name, int age) { this.name = name; this.age = age; } }
+
+USER: How do you define a getter and setter in Java?
+ASSISTANT: public String getName() { return name; } public void setName(String name) { this.name = name; }
+
+USER: What is encapsulation in Java?
+ASSISTANT: Encapsulation hides internal data using private fields and provides public getter and setter methods to access or modify them. Example: private int balance; public int getBalance() { return balance; }
+
+USER: How does inheritance work in Java?
+ASSISTANT: class Animal { public void speak() { System.out.println("..."); } } class Dog extends Animal { public void speak() { System.out.println("Woof"); } }
+
+USER: How do you use the super keyword in Java?
+ASSISTANT: class Dog extends Animal { public Dog(String name) { super(name); } }
+
+USER: What is method overriding in Java?
+ASSISTANT: class Animal { public void speak() { System.out.println("Sound"); } } class Cat extends Animal { @Override public void speak() { System.out.println("Meow"); } }
+
+USER: How do you define an interface in Java?
+ASSISTANT: public interface Drawable { void draw(); }
+
+USER: How do you implement an interface in Java?
+ASSISTANT: public class Circle implements Drawable { public void draw() { System.out.println("Drawing circle"); } }
+
+USER: What is an abstract class in Java?
+ASSISTANT: public abstract class Shape { public abstract double area(); public void describe() { System.out.println("I am a shape with area: " + area()); } }
+
+USER: What is the difference between interface and abstract class?
+ASSISTANT: An interface defines a contract with no state. An abstract class can have fields, constructors, and concrete methods. A class can implement multiple interfaces but extend only one abstract class.
+
+USER: How do you use the this keyword in Java?
+ASSISTANT: public Person(String name) { this.name = name; }
+
+USER: How do you use instanceof in Java?
+ASSISTANT: if (obj instanceof Dog) { Dog d = (Dog) obj; d.speak(); }
+
+USER: How do you define an enum in Java?
+ASSISTANT: public enum Direction { NORTH, SOUTH, EAST, WEST; }
+
+USER: How do you use an enum in a switch statement?
+ASSISTANT: switch (dir) { case NORTH: System.out.println("Go north"); break; case SOUTH: System.out.println("Go south"); break; }
+
+USER: How do you define a static field and method?
+ASSISTANT: public class Counter { private static int count = 0; public static int getCount() { return count; } }
+
+USER: How do you demonstrate polymorphism in Java?
+ASSISTANT: Shape[] shapes = {new Circle(5), new Rectangle(3, 4)}; for (Shape s : shapes) { System.out.println(s.area()); }
+
+USER: How do you use an ArrayList in Java?
+ASSISTANT: import java.util.ArrayList; ArrayList<String> list = new ArrayList<>(); list.add("Alice"); list.add("Bob"); list.remove("Alice"); for (String s : list) { System.out.println(s); }
+
+USER: How do you use a HashMap in Java?
+ASSISTANT: import java.util.HashMap; HashMap<String, Integer> map = new HashMap<>(); map.put("Alice", 95); map.put("Bob", 87); int grade = map.get("Alice");
+
+USER: How do you check if a key exists in a HashMap?
+ASSISTANT: if (map.containsKey("Alice")) { System.out.println(map.get("Alice")); }
+
+USER: How do you iterate over a HashMap?
+ASSISTANT: for (Map.Entry<String, Integer> entry : map.entrySet()) { System.out.println(entry.getKey() + ": " + entry.getValue()); }
+
+USER: How do you use a HashSet in Java?
+ASSISTANT: import java.util.HashSet; HashSet<String> set = new HashSet<>(); set.add("apple"); set.add("banana"); set.contains("apple");
+
+USER: How do you implement a Stack in Java using ArrayList?
+ASSISTANT: ArrayList<Integer> stack = new ArrayList<>(); stack.add(10); int top = stack.remove(stack.size() - 1);
+
+USER: How do you implement a Queue using LinkedList?
+ASSISTANT: import java.util.LinkedList; LinkedList<Integer> queue = new LinkedList<>(); queue.offer(1); queue.offer(2); int front = queue.poll();
+
+USER: How do you use a try-catch block in Java?
+ASSISTANT: try { int n = Integer.parseInt("abc"); } catch (NumberFormatException e) { System.out.println("Invalid number: " + e.getMessage()); }
+
+USER: How do you use try-catch-finally?
+ASSISTANT: try { int result = 10 / 0; } catch (ArithmeticException e) { System.out.println("Error: " + e.getMessage()); } finally { System.out.println("Always runs"); }
+
+USER: How do you throw a custom exception?
+ASSISTANT: if (age < 0) { throw new IllegalArgumentException("Age cannot be negative"); }
+
+USER: How do you write a generic method in Java?
+ASSISTANT: public static <T extends Comparable<T>> T max(T a, T b) { return (a.compareTo(b) >= 0) ? a : b; }
+
+USER: How do you sort a list with a Comparator?
+ASSISTANT: import java.util.Collections; Collections.sort(list, (a, b) -> a.length() - b.length());
+
+USER: How do you use lambda expressions with a list?
+ASSISTANT: list.sort((a, b) -> a.compareTo(b));
+
+USER: How do you use Java Streams to filter even numbers?
+ASSISTANT: List<Integer> evens = numbers.stream().filter(n -> n % 2 == 0).collect(Collectors.toList());
+
+USER: How do you use Java Streams to find the sum?
+ASSISTANT: int total = numbers.stream().mapToInt(Integer::intValue).sum();
+
+USER: What is Big O O(1) time complexity?
+ASSISTANT: O(1) is constant time. Example: accessing an array element by index. int val = arr[5]; This takes the same time regardless of array size.
+
+USER: What is Big O O(n) time complexity?
+ASSISTANT: O(n) is linear time. Example: a single loop over n elements. for (int x : arr) { sum += x; } Time grows proportionally with input size.
+
+USER: What is Big O O(n squared) time complexity?
+ASSISTANT: O(n^2) is quadratic time. Example: nested loops like bubble sort. for (int i = 0; i < n; i++) { for (int j = 0; j < n; j++) { ... } } Avoid for large inputs.
+
+USER: What is Big O O(log n) time complexity?
+ASSISTANT: O(log n) is logarithmic time. Example: binary search. Each step halves the search space. Very efficient for large sorted datasets.
+
+USER: How do you implement a linked list node in Java?
+ASSISTANT: class Node { int data; Node next; Node(int data) { this.data = data; this.next = null; } }
+
+USER: How do you add a node to a linked list?
+ASSISTANT: class LinkedList { Node head; void add(int data) { Node newNode = new Node(data); if (head == null) { head = newNode; return; } Node curr = head; while (curr.next != null) curr = curr.next; curr.next = newNode; } }
+
+USER: How do you print all elements of a linked list?
+ASSISTANT: Node curr = head; while (curr != null) { System.out.print(curr.data + " "); curr = curr.next; }
+
+USER: How do you implement a stack class in Java?
+ASSISTANT: class Stack { private ArrayList<Integer> data = new ArrayList<>(); public void push(int val) { data.add(val); } public int pop() { return data.remove(data.size() - 1); } public int peek() { return data.get(data.size() - 1); } public boolean isEmpty() { return data.isEmpty(); } }
+
+USER: How do you implement a binary tree in Java?
+ASSISTANT: class TreeNode { int val; TreeNode left, right; TreeNode(int val) { this.val = val; } }
+
+USER: How do you do an in-order traversal of a binary tree?
+ASSISTANT: public static void inOrder(TreeNode root) { if (root == null) return; inOrder(root.left); System.out.print(root.val + " "); inOrder(root.right); }
+
+USER: How do you insert into a binary search tree?
+ASSISTANT: public TreeNode insert(TreeNode root, int val) { if (root == null) return new TreeNode(val); if (val < root.val) root.left = insert(root.left, val); else root.right = insert(root.right, val); return root; }
+
+USER: How do you write merge sort in Java?
+ASSISTANT: public static void mergeSort(int[] arr, int left, int right) { if (left >= right) return; int mid = (left + right) / 2; mergeSort(arr, left, mid); mergeSort(arr, mid + 1, right); merge(arr, left, mid, right); }
+
+USER: How do you merge two sorted halves?
+ASSISTANT: public static void merge(int[] arr, int l, int m, int r) { int[] temp = Arrays.copyOfRange(arr, l, r + 1); int i = 0, j = m - l + 1, k = l; while (i <= m - l && j <= r - l) { if (temp[i] <= temp[j]) arr[k++] = temp[i++]; else arr[k++] = temp[j++]; } while (i <= m - l) arr[k++] = temp[i++]; while (j <= r - l) arr[k++] = temp[j++]; }
+
+USER: How do you count the digits of a number recursively?
+ASSISTANT: public static int countDigits(int n) { if (n == 0) return 0; return 1 + countDigits(n / 10); }
+
+USER: How do you sum the digits of a number recursively?
+ASSISTANT: public static int sumDigits(int n) { if (n == 0) return 0; return (n % 10) + sumDigits(n / 10); }
+
+USER: How do you check if a number is a palindrome?
+ASSISTANT: public static boolean isPalindromeNum(int n) { int original = n, reversed = 0; while (n > 0) { reversed = reversed * 10 + n % 10; n /= 10; } return original == reversed; }
+
+USER: How do you count vowels in a string?
+ASSISTANT: public static int countVowels(String s) { int count = 0; for (char c : s.toLowerCase().toCharArray()) { if ("aeiou".indexOf(c) >= 0) count++; } return count; }
+
+USER: How do you remove duplicates from an ArrayList?
+ASSISTANT: ArrayList<Integer> unique = new ArrayList<>(new HashSet<>(list));
+
+USER: How do you convert an ArrayList to an array?
+ASSISTANT: String[] arr = list.toArray(new String[0]);
+
+USER: How do you convert an array to an ArrayList?
+ASSISTANT: ArrayList<String> list = new ArrayList<>(Arrays.asList(arr));
+
+USER: How do you read user input in Java?
+ASSISTANT: import java.util.Scanner; Scanner scanner = new Scanner(System.in); String input = scanner.nextLine(); int number = scanner.nextInt();
+
+USER: What does JVM stand for and what does it do?
+ASSISTANT: JVM stands for Java Virtual Machine. It executes Java bytecode, handles memory management, and provides platform independence. Java source code compiles to bytecode that runs on any JVM.
+
+USER: What is the difference between stack and heap memory in Java?
+ASSISTANT: Stack stores local variables and method calls. Heap stores objects created with new. Stack memory is fast and auto-managed. Heap memory is managed by the garbage collector.
+
+USER: What is garbage collection in Java?
+ASSISTANT: Garbage collection automatically frees heap memory occupied by objects that are no longer referenced. Java's GC runs in the background so programmers do not need to manually free memory.
+
+USER: What is a NullPointerException in Java?
+ASSISTANT: A NullPointerException occurs when you try to use a null reference. Example: String s = null; s.length(); throws NullPointerException. Always check for null before calling methods.
+
+USER: What is an ArrayIndexOutOfBoundsException?
+ASSISTANT: It occurs when you access an array index that does not exist. Example: int[] arr = {1,2,3}; arr[5]; throws ArrayIndexOutOfBoundsException. Valid indices are 0 to arr.length - 1.
+
+USER: How do you use StringBuilder in Java?
+ASSISTANT: StringBuilder sb = new StringBuilder(); sb.append("Hello"); sb.append(" "); sb.append("World"); String result = sb.toString();
+
+USER: How do you format a String using printf?
+ASSISTANT: System.out.printf("Name: %s, Age: %d, Score: %.2f%n", name, age, score);
+
+USER: How do you use String.format?
+ASSISTANT: String msg = String.format("Hello %s, you scored %d%%", name, score);
+
+USER: How do you split a String by a delimiter?
+ASSISTANT: String[] parts = "Alice,Bob,Carol".split(",");
+
+USER: How do you trim whitespace from a String?
+ASSISTANT: String trimmed = "  hello  ".trim();
+
+USER: How do you check if a String starts with a prefix?
+ASSISTANT: boolean ok = filename.startsWith("report_");
+
+USER: How do you check if a String ends with a suffix?
+ASSISTANT: boolean ok = filename.endsWith(".txt");
+
+USER: How do you replace characters in a String?
+ASSISTANT: String result = original.replace("old", "new");
+
+USER: How do you convert a char array to a String?
+ASSISTANT: char[] chars = {'H','i'}; String s = new String(chars);
+
+USER: How do you use Collections.sort?
+ASSISTANT: import java.util.Collections; ArrayList<Integer> list = new ArrayList<>(); list.add(3); list.add(1); list.add(2); Collections.sort(list);
+
+USER: How do you find the max element in a list?
+ASSISTANT: int max = Collections.max(list);
+
+USER: How do you use iterator to traverse a list?
+ASSISTANT: Iterator<String> it = list.iterator(); while (it.hasNext()) { System.out.println(it.next()); }
+
+USER: How do you write a Java program structure with a main method?
+ASSISTANT: public class Main { public static void main(String[] args) { System.out.println("Program starts here"); } }
+
+USER: How do you pass arguments to a Java program?
+ASSISTANT: public static void main(String[] args) { if (args.length > 0) { System.out.println("First arg: " + args[0]); } }
+
+USER: What are access modifiers in Java?
+ASSISTANT: public: accessible everywhere. private: accessible only within the class. protected: accessible within the package and subclasses. default (no modifier): accessible within the package only.
+
+USER: What is method chaining in Java?
+ASSISTANT: StringBuilder sb = new StringBuilder().append("Hello").append(" ").append("World"); String result = sb.toString();
+
+USER: How do you define a constructor that calls another constructor?
+ASSISTANT: public Rectangle() { this(1, 1); } public Rectangle(int width, int height) { this.width = width; this.height = height; }
+
+USER: How do you make a class immutable in Java?
+ASSISTANT: Make the class final, all fields private and final, no setters, and initialize all fields in the constructor.
+
+USER: What is a stack overflow in Java?
+ASSISTANT: A StackOverflowError happens when recursion is too deep with no base case. Example: public int bad(int n) { return bad(n - 1); } never stops and overflows the call stack.
+
+USER: How do you count the frequency of each character in a String?
+ASSISTANT: HashMap<Character, Integer> freq = new HashMap<>(); for (char c : s.toCharArray()) { freq.put(c, freq.getOrDefault(c, 0) + 1); }
+
+USER: How do you find the first non-repeated character in a String?
+ASSISTANT: for (char c : s.toCharArray()) { if (freq.get(c) == 1) { System.out.println(c); break; } }
+
+USER: How do you check if a string has balanced parentheses?
+ASSISTANT: Stack<Character> stack = new Stack<>(); for (char c : s.toCharArray()) { if (c == '(') stack.push(c); else if (c == ')') { if (stack.isEmpty()) return false; stack.pop(); } } return stack.isEmpty();
+
+USER: What is the purpose of the final keyword in Java?
+ASSISTANT: final on a variable means it cannot be reassigned. final on a method means it cannot be overridden. final on a class means it cannot be subclassed.
+
+USER: What is the purpose of the static keyword in Java?
+ASSISTANT: static means the member belongs to the class, not an instance. Static fields are shared across all instances. Static methods can be called without creating an object.
+
+USER: How do you define a private constructor to prevent instantiation?
+ASSISTANT: public class Singleton { private static Singleton instance; private Singleton() {} public static Singleton getInstance() { if (instance == null) instance = new Singleton(); return instance; } }
+
+USER: How do you implement a simple builder pattern?
+ASSISTANT: public class Person { private String name; private int age; public Person setName(String n) { this.name = n; return this; } public Person setAge(int a) { this.age = a; return this; } }
+
+USER: What is autoboxing in Java?
+ASSISTANT: Autoboxing converts a primitive to its wrapper class automatically. int n = 5; Integer boxed = n; Unboxing is the reverse: int unboxed = boxed;
+
+USER: What is the enhanced switch expression in modern Java?
+ASSISTANT: String result = switch (day) { case 1 -> "Monday"; case 2 -> "Tuesday"; default -> "Other"; };
+
+USER: How do you use Optional in Java?
+ASSISTANT: Optional<String> opt = Optional.ofNullable(name); String val = opt.orElse("Unknown");
+
+USER: What is the difference between ArrayList and LinkedList?
+ASSISTANT: ArrayList uses a dynamic array. Random access O(1), insert/delete O(n). LinkedList uses nodes. Insert/delete O(1) at head/tail, random access O(n). Use ArrayList for most cases.
+
+USER: What is recursion?
+ASSISTANT: Recursion is when a method calls itself. Every recursive method needs a base case to stop. Example: factorial(n) = n * factorial(n-1), base case: factorial(0) = 1.
+
+USER: What is an algorithm?
+ASSISTANT: An algorithm is a step-by-step procedure to solve a problem. It has a defined input, clear steps, and produces a correct output. Examples: sorting algorithms, search algorithms.
+
+USER: What is a data structure?
+ASSISTANT: A data structure organizes and stores data for efficient access and modification. Examples: array, ArrayList, HashMap, Stack, Queue, LinkedList, Tree.
+
+USER: What is object-oriented programming?
+ASSISTANT: OOP is a programming paradigm that organizes code into objects with state (fields) and behavior (methods). The four pillars are encapsulation, inheritance, polymorphism, and abstraction.
+
+USER: What are the four pillars of OOP?
+ASSISTANT: Encapsulation: hiding data. Inheritance: child class extends parent. Polymorphism: same method, different behavior. Abstraction: hiding implementation details with interfaces or abstract classes.
+
+USER: How do you print to console without a newline?
+ASSISTANT: System.out.print("Hello ");
+
+USER: How do you print to console with a newline?
+ASSISTANT: System.out.println("Hello");
+
+USER: How do you declare an empty ArrayList of integers?
+ASSISTANT: ArrayList<Integer> list = new ArrayList<>();
+
+USER: How do you get the size of an ArrayList?
+ASSISTANT: int size = list.size();
+
+USER: How do you get an element from an ArrayList by index?
+ASSISTANT: String item = list.get(0);
+
+USER: How do you remove an element from an ArrayList by index?
+ASSISTANT: list.remove(0);
+
+USER: How do you check if an ArrayList is empty?
+ASSISTANT: if (list.isEmpty()) { System.out.println("List is empty"); }
+
+USER: How do you clear all elements from an ArrayList?
+ASSISTANT: list.clear();
+
+USER: How do you check if a list contains an element?
+ASSISTANT: if (list.contains("Alice")) { System.out.println("Found"); }
+
+USER: What is the index of the last element in an array of size n?
+ASSISTANT: The last valid index is n - 1. For int[] arr = new int[5], valid indices are 0, 1, 2, 3, 4. arr[5] would throw ArrayIndexOutOfBoundsException.

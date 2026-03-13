@@ -1,0 +1,42 @@
+# Stage 2: Control Flow — if/else, ternary, switch, all loop types
+# Conditionals
+How do you write an if statement that prints Adult if age is 18 or older in Java?
+How do you write an if-else statement that prints Adult or Minor based on age in Java?
+How do you write an if-else-if chain to assign grades A B C D F based on score in Java?
+How do you write a ternary operator to assign Pass or Fail based on score >= 60 in Java?
+How do you use a nested if statement to check two conditions in Java?
+How do you check if a variable is between 10 and 20 using a boolean expression in Java?
+How do you write a switch statement for an integer day that prints Mon Tue Wed Thu Fri Sat Sun?
+How do you use the modern arrow switch expression in Java?
+How do you use switch with a String variable in Java?
+# for loops
+How do you write a for loop that prints numbers 1 to 10 in Java?
+How do you write a for loop that counts down from 10 to 1 in Java?
+How do you write a for loop that iterates over every other element using i += 2?
+How do you write a for-each loop to iterate over a String array in Java?
+How do you write a for-each loop to sum an int array in Java?
+# while and do-while
+How do you write a while loop that counts from 0 to 9 in Java?
+How do you write a while loop that counts down from 10 to 1 in Java?
+How do you write a do-while loop that keeps running until the user enters a positive number?
+How do you write a while loop that reads lines until the user types quit?
+# break and continue
+How do you use break to exit a loop early when a condition is met in Java?
+How do you use continue to skip even numbers in a loop printing only odd numbers in Java?
+How do you use break to find the first multiple of 7 between 1 and 100 in Java?
+# Computation loops
+How do you calculate the sum of integers 1 to 100 using a loop in Java?
+How do you calculate the factorial of 5 using a loop in Java?
+How do you find the largest number in an int array using a loop in Java?
+How do you count how many elements in an array are greater than 10 in Java?
+How do you find the average value of an int array using a loop in Java?
+# Nested loops
+How do you use nested loops to print a 3x3 multiplication table in Java?
+How do you use nested loops to print a right triangle of stars with 5 rows in Java?
+How do you use nested loops to print all pairs i j where i and j are from 1 to 3 in Java?
+# Pattern problems
+How do you write a loop to count the number of digits in a positive integer in Java?
+How do you write a loop to reverse the digits of an integer in Java?
+How do you write a loop to check if an integer is a palindrome in Java?
+How do you write a loop to find all prime numbers between 1 and 50 in Java?
+How do you write a loop to compute the nth power of 2 in Java?

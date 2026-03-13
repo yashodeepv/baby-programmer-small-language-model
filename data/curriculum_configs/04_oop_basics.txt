@@ -1,0 +1,60 @@
+# Stage 4: OOP — classes, inheritance, interfaces, abstraction, patterns
+# Classes and objects
+How do you define a Java class Animal with a private String field name and a public getter?
+How do you define a Java class Person with fields name and age and a constructor?
+How do you create an instance of a class in Java using new?
+How do you define getter and setter methods for a private field in Java?
+What is encapsulation in Java and why is it important?
+How do you demonstrate encapsulation with a BankAccount class with private balance?
+# Constructors
+How do you define a default no-argument constructor in Java?
+How do you demonstrate constructor overloading with a Rectangle class?
+How do you use the this keyword in a constructor to resolve naming conflicts in Java?
+How do you define a constructor that calls another constructor using this()?
+# Inheritance
+How does a Dog class extend an Animal class in Java?
+How do you use the super keyword to call a parent class constructor?
+How do you use the super keyword to call an overridden parent method?
+What does the @Override annotation do in Java?
+Can a class extend more than one class in Java? Why or why not?
+How do you prevent a class from being subclassed in Java?
+# Method overriding
+How do you override a speak method from Animal in a Dog subclass?
+What is the difference between method overriding and method overloading?
+How do you call the parent version of an overridden method in Java?
+# Polymorphism
+What is polymorphism in Java?
+How do you demonstrate runtime polymorphism with Animal references?
+How do you use instanceof before casting an object in Java?
+How do you use a Shape array holding Circle and Rectangle objects and call area on each?
+# Interfaces
+How do you define an interface named Drawable with an abstract method draw?
+How do you implement the Drawable interface in a Circle class?
+Can a class implement multiple interfaces in Java? Show an example.
+How do you define a default method inside an interface in Java?
+# Abstract classes
+How do you define an abstract class Shape with an abstract method area?
+How do you extend an abstract class and implement its abstract methods?
+What is the difference between an abstract class and an interface in Java?
+When should you use an interface versus an abstract class?
+# Static members
+How do you define a static field count that tracks how many instances are created?
+How do you define and call a static utility method in Java?
+What is the difference between a static method and an instance method?
+# Enums
+How do you define an enum named Direction with values NORTH SOUTH EAST WEST?
+How do you use an enum value in a switch statement in Java?
+How do you add a field and method to an enum in Java?
+# Design patterns (basic)
+How do you implement the Singleton pattern in Java?
+How do you implement a simple Builder pattern in Java with method chaining?
+How do you implement the Factory pattern with a Shape factory method?
+# Additional OOP concepts
+What is the final keyword and how does it apply to classes methods and fields?
+What is the static keyword and what does it mean for a field or method?
+How do you use autoboxing and unboxing in Java with Integer and int?
+What is the difference between shallow copy and deep copy in Java?
+How do you implement a toString method in a Java class?
+How do you implement an equals method in a Java class?
+How do you implement a hashCode method in a Java class?
+What is the purpose of the Object class in Java?

@@ -1,0 +1,101 @@
+# Stage 5: Advanced Java, Data Structures, Algorithms, CS Concepts
+# Collections: ArrayList
+How do you create an ArrayList of Strings and add five elements in Java?
+How do you remove an element from an ArrayList by value in Java?
+How do you remove an element from an ArrayList by index in Java?
+How do you get the size of an ArrayList in Java?
+How do you check if an ArrayList contains a specific element?
+How do you iterate over an ArrayList with a for-each loop in Java?
+How do you sort an ArrayList of Integers in Java?
+How do you convert an ArrayList to a plain array in Java?
+How do you convert an array to an ArrayList in Java?
+How do you remove all duplicates from an ArrayList in Java?
+# Collections: HashMap
+How do you create a HashMap from String to Integer in Java?
+How do you add key-value pairs to a HashMap in Java?
+How do you retrieve a value by key from a HashMap in Java?
+How do you check if a key exists in a HashMap?
+How do you check if a value exists in a HashMap?
+How do you iterate over all entries in a HashMap in Java?
+How do you count the frequency of each character in a String using a HashMap?
+How do you find the most frequent element in an array using a HashMap?
+# Collections: Set and Queue
+How do you use a HashSet to store unique elements in Java?
+How do you check for duplicates in an array using a HashSet?
+How do you use a LinkedList as a Queue with offer and poll in Java?
+How do you use a PriorityQueue to always get the smallest element in Java?
+# Stack operations
+How do you implement a Stack class in Java using an ArrayList?
+How do you use a Stack to check if parentheses in a string are balanced?
+How do you use a Stack to reverse a String in Java?
+# Sorting algorithms
+How do you write bubble sort in Java?
+How do you write selection sort in Java?
+How do you write insertion sort in Java?
+How do you write merge sort in Java?
+How do you write quick sort in Java?
+What is the time complexity of bubble sort?
+What is the time complexity of merge sort?
+What is the time complexity of quick sort in average and worst case?
+# Searching algorithms
+How do you write linear search in Java?
+How do you write binary search in Java on a sorted array?
+What is the time complexity of binary search?
+When can you use binary search and when can you not?
+# Linked List
+How do you define a Node class for a singly linked list in Java?
+How do you implement a LinkedList class with add and printAll methods?
+How do you find the middle node of a linked list in Java?
+How do you detect a cycle in a linked list in Java?
+How do you reverse a linked list iteratively in Java?
+# Trees
+How do you define a binary tree node class in Java?
+How do you insert a value into a binary search tree?
+How do you do in-order traversal of a binary tree in Java?
+How do you do pre-order traversal of a binary tree in Java?
+How do you find the height of a binary tree recursively?
+How do you count the number of nodes in a binary tree?
+# Graphs (basic)
+What is a graph in computer science?
+What is the difference between directed and undirected graphs?
+What is BFS breadth first search and when do you use it?
+What is DFS depth first search and when do you use it?
+How do you represent a graph as an adjacency list in Java?
+# Big O and complexity
+What does Big O notation describe?
+What is O(1) constant time complexity? Give a Java example.
+What is O(n) linear time complexity? Give a Java example.
+What is O(n squared) quadratic time complexity? Give a Java example.
+What is O(log n) logarithmic time complexity? Give a Java example.
+What is O(n log n) time complexity and which sorting algorithms achieve it?
+How do you determine the time complexity of a method with a single loop?
+How do you determine the time complexity of a method with nested loops?
+# Exceptions and error handling
+How do you write a try-catch block to handle NumberFormatException in Java?
+How do you write try-catch-finally in Java?
+How do you throw an IllegalArgumentException in Java?
+How do you create a custom exception class in Java?
+What is the difference between checked and unchecked exceptions in Java?
+What causes a NullPointerException and how do you prevent it?
+What causes an ArrayIndexOutOfBoundsException in Java?
+What causes a StackOverflowError in Java?
+# Generics
+How do you write a generic method that finds the max of two Comparable objects?
+How do you write a generic class Pair that holds two values of any type?
+What is type erasure in Java generics?
+How do you use a bounded type parameter like T extends Comparable?
+# Functional programming
+How do you sort a list of strings by length using a lambda in Java?
+How do you use Comparator.comparing to sort a list of Person by age?
+How do you use Stream filter to get only even numbers from a list?
+How do you use Stream map to convert a list of strings to uppercase?
+How do you use Stream reduce to compute the product of a list of integers?
+How do you use Optional to safely handle a potentially null value in Java?
+# Java internals
+What is the JVM and what role does it play in running Java programs?
+What is the difference between stack memory and heap memory in Java?
+What is garbage collection in Java and how does it work?
+What is autoboxing in Java?
+What is the difference between ArrayList and LinkedList in Java?
+What is String immutability in Java and why does it matter?
+What is the purpose of the StringBuilder class in Java?

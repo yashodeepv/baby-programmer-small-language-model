@@ -1,0 +1,46 @@
+# Stage 1: Variables, Data Types, Operators — breadth + depth
+# Basics: primitives
+How do you declare an int variable named score with value 100 in Java?
+How do you declare a double variable named price set to 9.99 in Java?
+How do you declare a String variable named name set to Alice in Java?
+How do you declare a boolean variable named isActive set to true in Java?
+How do you declare a char variable named grade set to A in Java?
+How do you declare a long variable named population in Java?
+How do you declare a float variable named temperature in Java?
+How do you declare a byte variable in Java and what is its value range?
+How do you declare a final constant named MAX_SIZE with value 100 in Java?
+# Operators
+How do you use the modulo operator in Java to check if a number is even?
+How do you increment a variable by 1 using the ++ operator in Java?
+How do you decrement a variable by 1 in Java?
+How do you add 5 to a variable total using the += operator in Java?
+What is integer division in Java and how does 7 divided by 2 evaluate?
+How do you cast a double to an int in Java?
+How do you cast an int to a double to get a decimal result in Java?
+# Math
+How do you compute the absolute value of a negative integer in Java?
+How do you find the maximum of two integers using Math.max in Java?
+How do you find the minimum of two integers using Math.min in Java?
+How do you compute the square root of 25 using Math.sqrt in Java?
+How do you raise 2 to the power of 10 using Math.pow in Java?
+How do you round a double to the nearest long using Math.round in Java?
+# Strings
+How do you concatenate Hello and World with a space between them in Java?
+How do you find the length of a String in Java?
+How do you convert a String to uppercase in Java?
+How do you convert a String to lowercase in Java?
+How do you check if two Strings are equal in Java?
+What is the difference between == and equals when comparing Strings in Java?
+How do you check if a String contains the substring Ali in Java?
+How do you get the character at index 2 from a String in Java?
+How do you convert an int to a String in Java using String.valueOf?
+How do you convert a String to an int using Integer.parseInt in Java?
+How do you convert a String to a double using Double.parseDouble in Java?
+How do you trim whitespace from both ends of a String in Java?
+How do you split a comma-separated String into an array in Java?
+How do you replace all occurrences of old with new in a String in Java?
+How do you check if a String starts with report_ in Java?
+How do you check if a String ends with .txt in Java?
+How do you use StringBuilder to build a String efficiently in Java?
+How do you format a String using String.format with name and score in Java?
+How do you use printf to print a formatted line with a name and integer in Java?
