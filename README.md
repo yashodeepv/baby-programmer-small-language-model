@@ -88,31 +88,45 @@ BabyProgrammer is a **decoder-only Transformer** — the same family of architec
 that powers modern language models like GPT. It is a character-level model, meaning
 it processes and generates one character at a time rather than word tokens.
 
-```
-Input text (characters)
-        |
-        v
-  Token Embedding         <-- maps each char to a 384-dim vector
-        +
-Position Embedding        <-- adds positional information (0 to 255)
-        |
-        v
-  [ Transformer Block ] x6
-  |                      |
-  | LayerNorm             |
-  | Multi-Head Attention  | <-- 6 heads, each 64 dims (384 / 6)
-  |   Query, Key, Value   |     causal mask: can only look backward
-  | Residual connection   |
-  |                      |
-  | LayerNorm             |
-  | Feed Forward Net      | <-- Linear(384->1536) -> GELU -> Linear(1536->384)
-  | Residual connection   |
-        |
-        v
-  Final LayerNorm
-        |
-        v
-  Linear head -> vocab logits -> Softmax -> next character probabilities
+```mermaid
+flowchart TD
+    A(["📝 Input Text\n(character sequence)"]):::input
+    B["🔤 Token Embedding\nchar → 384-dim vector"]:::layer
+    C["📍 Position Embedding\npositions 0 – 255"]:::layer
+    D(["➕ Add & Stack"]):::add
+
+    A --> B
+    B --> D
+    C --> D
+
+    subgraph BLOCK ["🔁  Transformer Block  ×  6"]
+        direction TB
+        LN1["LayerNorm"]:::norm
+        ATT["🧠 Multi-Head Attention\n6 heads · 64 dims each\ncausal mask — looks backward only"]:::attn
+        R1(["➕ Residual"]):::add
+        LN2["LayerNorm"]:::norm
+        FFN["⚡ Feed-Forward Network\n384 → 1536 → GELU → 384"]:::ffn
+        R2(["➕ Residual"]):::add
+
+        LN1 --> ATT --> R1 --> LN2 --> FFN --> R2
+    end
+
+    D --> LN1
+    R2 --> LN_F
+
+    LN_F["LayerNorm"]:::norm
+    PROJ["🎯 Linear Projection\n→ vocab logits  (89 chars)"]:::layer
+    OUT(["🔮 Softmax → next character\nprobabilities"]):::output
+
+    LN_F --> PROJ --> OUT
+
+    classDef input  fill:#4A90D9,stroke:#2c5f8a,color:#fff,rx:8
+    classDef layer  fill:#2D6A4F,stroke:#1b4332,color:#fff
+    classDef norm   fill:#6B4C9A,stroke:#432874,color:#fff
+    classDef attn   fill:#C0392B,stroke:#922b21,color:#fff
+    classDef ffn    fill:#D35400,stroke:#a04000,color:#fff
+    classDef add    fill:#555,stroke:#333,color:#fff,rx:20
+    classDef output fill:#1A7A4A,stroke:#0f4d2d,color:#fff,rx:8
 ```
 
 **Fixed architecture spec** — do not change these after the first checkpoint is saved:
@@ -134,19 +148,32 @@ Position Embedding        <-- adds positional information (0 to 255)
 
 Training happens in two sequential phases:
 
-```
-PHASE 1 — Syntax Imprinting (train_corpus.py)
-  data/java_corpus.txt  -->  BabyProgrammer learns Java syntax and Q&A format
-  No internet or external tools required
-  Duration: ~30-60 min on RTX 4060
+```mermaid
+flowchart LR
+    subgraph P1 ["⚙️  Phase 1 — Syntax Imprinting  (train_corpus.py)"]
+        direction LR
+        CORP["📄 java_corpus.txt\n~150 hand-crafted Q&A pairs"]:::data
+        T1["🏋️ train_corpus.py\n20 000 steps · AdamW\n~30–60 min on RTX 4060"]:::script
+        CORP --> T1
+    end
 
-         |
-         v
+    T1 --> CKPT
 
-PHASE 2 — Knowledge Distillation (auto_train_v2.py)
-  curriculum_configs/  -->  Qwen3-Coder generates answers  -->  Baby trains on them
-  Requires Ollama running locally with qwen3-coder pulled
-  Duration: varies by model size and number of lessons (~250 total)
+    subgraph P2 ["🧬  Phase 2 — Knowledge Distillation  (auto_train_v2.py)"]
+        direction LR
+        CURR["📚 curriculum_configs/\n250 lesson prompts"]:::data
+        QWEN["🤖 Qwen3-Coder 30B\nteacher model via Ollama"]:::teacher
+        MASK["🎯 Masked Training Step\ngradients on ASSISTANT tokens only"]:::script
+        CURR --> QWEN --> MASK
+    end
+
+    CKPT[(baby_programmer.pth\n10.91 M params)]:::ckpt
+    MASK --> CKPT
+
+    classDef data    fill:#2D6A4F,stroke:#1b4332,color:#fff
+    classDef script  fill:#4A90D9,stroke:#2c5f8a,color:#fff
+    classDef teacher fill:#C0392B,stroke:#922b21,color:#fff
+    classDef ckpt    fill:#6B4C9A,stroke:#432874,color:#fff
 ```
 
 ---
@@ -290,23 +317,35 @@ BabyProgrammer then trains directly on that example — focusing only on the ans
 This is **knowledge distillation**: a large capable model transfers its knowledge
 into a much smaller model by producing high-quality training data on demand.
 
-```
-Curriculum prompt
-        |
-        v
-  Qwen3-Coder (30B)           <-- the Teacher, runs via Ollama locally
-  generates a Q&A pair
-        |
-        v
-  USER: [question]
-  ASSISTANT: [Java code]
-        |
-        v
-  Masked training step        <-- model only learns the ASSISTANT answer
-        |
-        v
-  BabyProgrammer (10M)        <-- the Student, weights updated
-  checkpoint saved
+```mermaid
+flowchart TD
+    PROMPT(["📋 Curriculum Prompt\n(topic from lesson file)"]):::input
+
+    subgraph TEACHER ["🤖 Teacher  —  Qwen3-Coder 30B  (Ollama)"]
+        GEN["Generates a complete\nUSER / ASSISTANT Q&A pair"]:::teacher
+    end
+
+    subgraph PAIR ["📝 Generated Training Example"]
+        direction LR
+        Q["USER:\nHow do you write a for-loop?"]:::question
+        ANS["ASSISTANT:\nfor (int i=0; i<n; i++) { ... }"]:::answer
+        Q -.-> ANS
+    end
+
+    subgraph TRAIN ["🎯 Masked Training Step"]
+        MASK["Loss computed on\nASSISTANT tokens only\n(USER prompt is masked out)"]:::mask
+    end
+
+    STUDENT(["🧠 BabyProgrammer  10M params\nweights updated · checkpoint saved"]):::output
+
+    PROMPT --> GEN --> PAIR --> MASK --> STUDENT
+
+    classDef input    fill:#4A90D9,stroke:#2c5f8a,color:#fff,rx:8
+    classDef teacher  fill:#C0392B,stroke:#922b21,color:#fff
+    classDef question fill:#555,stroke:#333,color:#ccc
+    classDef answer   fill:#2D6A4F,stroke:#1b4332,color:#fff
+    classDef mask     fill:#D35400,stroke:#a04000,color:#fff
+    classDef output   fill:#6B4C9A,stroke:#432874,color:#fff,rx:8
 ```
 
 ### Prerequisites
