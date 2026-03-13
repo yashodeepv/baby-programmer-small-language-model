@@ -9,6 +9,55 @@ into the small BabyProgrammer brain using a technique called **knowledge distill
 
 ---
 
+## Current Benchmark (v0.1 checkpoint)
+
+Evaluated with `python test_baby.py` — 25 questions across 5 Java curriculum stages,
+tested at temperature 0.8 with 150 generated tokens per answer.
+
+| Stage | Score | % | Status |
+|---|---|---|---|
+| Stage 1: Variables & Types | 4/5 | 80% | |
+| Stage 2: Control Flow | 1/5 | 20% | Needs work |
+| Stage 3: Methods & Arrays | 5/5 | 100% | |
+| Stage 4: OOP | 1/5 | 20% | Needs work |
+| Stage 5: Advanced Topics | 1/5 | 20% | Needs work |
+| **Overall** | **12/25** | **48%** | **Grade: C** |
+
+**Vocab:** 89 characters &nbsp;|&nbsp; **Device:** CUDA &nbsp;|&nbsp; **Params:** ~10.91M
+
+> **Grade C** — Baby is learning. Weak areas (control flow, OOP, advanced topics) improve
+> with additional Qwen3-Coder distillation rounds via `auto_train_v2.py`.
+
+<details>
+<summary>Sample outputs from this checkpoint</summary>
+
+**PASS — Variables (4/4 keywords)**
+```
+Q: How do you declare a double variable named price set to 9.99?
+A: double price = 9.99;
+```
+
+**PASS — Arrays (4/4 keywords)**
+```
+Q: How do you declare an int array of size 5 in Java?
+A: int[] arr = new int[5];
+```
+
+**FAIL — Control Flow (0/4 keywords)**
+```
+Q: Write a switch statement for an integer day with cases 1 and 2 in Java.
+A: StringBuilder suflo is of a gent is an abstract class can halve define...
+```
+
+**FAIL — OOP (0/4 keywords)**
+```
+Q: How does a Dog class extend an Animal class in Java?
+A: An algorithm is the decimal varial of a number revent nite a stop...
+```
+</details>
+
+---
+
 ## Project Structure
 
 ```
