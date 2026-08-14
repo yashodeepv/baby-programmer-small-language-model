@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baby Programmer — Architecture</title>
+<meta name="description" content="Architecture of baby-programmer: a 25.8M-parameter model that writes AArch64 assembly, trained on a corpus where every example was compiled and executed before it became data.">
+<style>
+  /* Light-only by choice. Every colour defined once; no media query, no theme
+     stamp, so the page renders identically on any host background. */
+  :root{
+    color-scheme: light;
+    --paper:#fdfbf7;         /* bone, not white */
+    --panel:#f6f2ec;
+    --ink:#1a1512;
+    --ink-2:#574f48;
+    --ink-3:#8b8078;
+    --rule:#e7e0d6;
+    --rule-2:#c8bcae;
+    --teal:#a2541f;          /* the one signal colour — deep copper */
+    --teal-soft:#a2541f14;
+    --amber:#96631a;
+    --green:#4d6b22;
+    --red:#a3392a;
+    --grid:#a2541f0d;
+    --mono: ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+       font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:0 26px 100px}
+  .prose{max-width:70ch}
+
+  /* ---- masthead ---- */
+  header{padding:64px 0 34px;border-bottom:2px solid var(--ink);margin-bottom:8px}
+  .tag{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+       color:var(--teal);margin:0 0 18px}
+  h1{font-family:var(--mono);font-size:clamp(28px,4.6vw,42px);font-weight:600;
+     letter-spacing:-.03em;line-height:1.05;margin:0 0 16px}
+  .sub{font-size:18px;color:var(--ink-2);margin:0;max-width:60ch}
+  .spec{display:flex;flex-wrap:wrap;gap:0;margin-top:30px;border:1px solid var(--rule-2)}
+  .spec div{flex:1 1 150px;padding:13px 16px;border-right:1px solid var(--rule-2)}
+  .spec div:last-child{border-right:0}
+  .spec dt{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+           color:var(--ink-3);margin:0 0 6px}
+  .spec dd{font-family:var(--mono);font-size:19px;font-weight:600;margin:0;
+           letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+
+  /* ---- sections ---- */
+  section{margin-top:66px;scroll-margin-top:20px}
+  h2{display:flex;align-items:baseline;gap:14px;margin:0 0 18px;
+     padding-bottom:10px;border-bottom:1px solid var(--rule-2)}
+  h2 .num{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--teal);
+          letter-spacing:.1em}
+  h2 .txt{font-size:20px;font-weight:650;letter-spacing:-.02em}
+  h3{font-family:var(--mono);font-size:14px;font-weight:650;margin:32px 0 0;
+     letter-spacing:-.01em;color:var(--ink)}
+  p{margin:13px 0 0} p:first-child{margin-top:0}
+  ul,ol{margin:13px 0 0;padding-left:21px} li{margin:6px 0}
+  code{font-family:var(--mono);font-size:.87em;background:var(--panel);
+       padding:1.5px 5px;border-radius:3px;border:1px solid var(--rule)}
+
+  pre{margin:16px 0 0;padding:15px 17px;overflow-x:auto;background:var(--panel);
+      border:1px solid var(--rule);border-left:2px solid var(--rule-2);
+      font-family:var(--mono);font-size:12.5px;line-height:1.62;color:var(--ink)}
+  pre code{background:none;padding:0;border:0;font-size:inherit}
+  pre .c{color:var(--ink-3)} pre .k{color:var(--teal);font-weight:600}
+  pre .o{color:var(--green)}
+
+  /* ---- figures ---- */
+  figure{margin:22px 0 0;border:1px solid var(--rule-2);background:var(--paper);
+         background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                          linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+         background-size:22px 22px}
+  figure .inner{padding:18px 18px 6px;overflow-x:auto}
+  figure svg{display:block;width:100%;height:auto;min-width:520px}
+  figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-3);
+             padding:9px 16px;border-top:1px solid var(--rule);background:var(--panel)}
+  figcaption b{color:var(--teal);font-weight:600;letter-spacing:.12em;margin-right:9px}
+
+  /* svg primitives */
+  .bx{fill:var(--paper);stroke:var(--rule-2);stroke-width:1.4}
+  .bx-a{fill:var(--teal-soft);stroke:var(--teal);stroke-width:1.4}
+  .bx-d{fill:none;stroke:var(--rule-2);stroke-width:1.2;stroke-dasharray:4 4}
+  .ln{stroke:var(--rule-2);stroke-width:1.4;fill:none}
+  .ln-a{stroke:var(--teal);stroke-width:1.6;fill:none}
+  .ln-r{stroke:var(--red);stroke-width:1.4;fill:none;stroke-dasharray:4 3}
+  .t{font-family:ui-monospace,monospace;font-size:11.5px;fill:var(--ink)}
+  .t-s{font-family:ui-monospace,monospace;font-size:10px;fill:var(--ink-3)}
+  .t-a{font-family:ui-monospace,monospace;font-size:11.5px;fill:var(--teal);font-weight:600}
+  .t-b{font-family:ui-monospace,monospace;font-size:12px;fill:var(--ink);font-weight:600}
+
+  /* ---- tables ---- */
+  .scroll{overflow-x:auto;margin-top:16px}
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  th,td{text-align:left;padding:8px 13px;border-bottom:1px solid var(--rule);vertical-align:top}
+  th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+     color:var(--ink-3);font-weight:600;white-space:nowrap;border-bottom:1px solid var(--rule-2)}
+  tbody tr:last-child td{border-bottom:0}
+  td.m{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+  td.n{font-family:var(--mono);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+  /* ---- callouts ---- */
+  .note{margin-top:18px;padding:14px 18px;background:var(--panel);
+        border-left:3px solid var(--teal);border-radius:0 4px 4px 0}
+  .note.warn{border-left-color:var(--amber)}
+  .note.bad{border-left-color:var(--red)}
+  .note p:first-child{margin-top:0}
+  .note .h{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+           color:var(--ink-3);margin:0 0 8px}
+  .note.bad .h{color:var(--red)} .note.warn .h{color:var(--amber)}
+
+  .pull{margin:26px 0 0;padding:20px 24px;border-top:2px solid var(--ink);
+        border-bottom:1px solid var(--rule-2)}
+  .pull p{font-size:18.5px;line-height:1.45;margin:0;letter-spacing:-.01em}
+  .pull .src{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:10px;
+             letter-spacing:.06em}
+
+  a{color:var(--teal)}
+  footer{margin-top:70px;padding-top:16px;border-top:2px solid var(--ink);
+         font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+</style>
+<style>
+  html{-webkit-text-size-adjust:100%}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="tag">Architecture reference · AArch64 · verified corpus</p>
+  <h1>Baby Programmer</h1>
+  <p class="sub">A 25.8M-parameter transformer that writes AArch64 assembly, and the generator that feeds it — in which every training example was compiled and executed before it became data.</p>
+  <div class="spec">
+    <div><dt>Parameters</dt><dd>25.8M</dd></div>
+    <div><dt>Vocabulary</dt><dd>390</dd></div>
+    <div><dt>Programs</dt><dd>26,000</dd></div>
+    <div><dt>Executions</dt><dd>312,000</dd></div>
+    <div><dt>Unverified</dt><dd>0</dd></div>
+  </div>
+</header>
+
+<section>
+  <h2><span class="num">01</span><span class="txt">System</span></h2>
+  <div class="prose">
+    <p>Two systems. A <b>verified program generator</b> and a <b>small transformer</b>. The generator is the substantial half — the model is largely an instrument for measuring what the generator managed to teach.</p>
+  </div>
+
+  <figure>
+    <div class="inner">
+      <svg viewBox="0 0 860 250" role="img" aria-label="A sampled IR tree fans out into a question, assembly and an oracle. Assembly and oracle meet in the verifier; only verified programs reach the corpus, which trains the model.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c8bcae"/></marker>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#a2541f"/></marker>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#a3392a"/></marker>
+        </defs>
+
+        <rect class="bx-d" x="8" y="8" width="470" height="234" rx="4"/>
+        <text class="t-s" x="20" y="26">GENERATOR</text>
+        <rect class="bx-d" x="496" y="8" width="356" height="234" rx="4"/>
+        <text class="t-s" x="508" y="26">MODEL</text>
+
+        <rect class="bx" x="24" y="104" width="104" height="42" rx="4"/>
+        <text class="t" x="76" y="122" text-anchor="middle">grammar</text>
+        <text class="t-s" x="76" y="136" text-anchor="middle">sample</text>
+
+        <rect class="bx-a" x="152" y="104" width="88" height="42" rx="4"/>
+        <text class="t-a" x="196" y="129" text-anchor="middle">IR tree</text>
+
+        <path class="ln" d="M128,125 L148,125" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="268" y="46" width="122" height="34" rx="4"/>
+        <text class="t" x="329" y="67" text-anchor="middle">question</text>
+        <rect class="bx" x="268" y="106" width="122" height="34" rx="4"/>
+        <text class="t" x="329" y="127" text-anchor="middle">assembly</text>
+        <rect class="bx" x="268" y="166" width="122" height="34" rx="4"/>
+        <text class="t" x="329" y="187" text-anchor="middle">oracle</text>
+
+        <path class="ln" d="M240,120 C256,120 250,63 264,63" marker-end="url(#a1)"/>
+        <path class="ln" d="M240,125 L264,124" marker-end="url(#a1)"/>
+        <path class="ln" d="M240,130 C256,130 250,183 264,183" marker-end="url(#a1)"/>
+        <text class="t-s" x="248" y="52">render</text>
+        <text class="t-s" x="246" y="150">lower</text>
+        <text class="t-s" x="244" y="212">evaluate</text>
+
+        <rect class="bx-a" x="406" y="126" width="60" height="58" rx="4"/>
+        <text class="t-a" x="436" y="150" text-anchor="middle">verify</text>
+        <text class="t-s" x="436" y="166" text-anchor="middle">run it</text>
+        <path class="ln-a" d="M390,124 C398,124 398,144 402,148" marker-end="url(#a2)"/>
+        <path class="ln-a" d="M390,183 C398,183 398,168 402,163" marker-end="url(#a2)"/>
+
+        <path class="ln-r" d="M436,126 L436,96 L400,96" marker-end="url(#a3)"/>
+        <text class="t-s" x="398" y="90" text-anchor="end" fill="#a3392a">mismatch → abort</text>
+
+        <rect class="bx" x="512" y="126" width="96" height="42" rx="4"/>
+        <text class="t" x="560" y="152" text-anchor="middle">corpus</text>
+        <path class="ln-a" d="M466,152 L508,150" marker-end="url(#a2)"/>
+        <path class="ln" d="M390,63 C470,63 470,140 508,142" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="632" y="126" width="88" height="42" rx="4"/>
+        <text class="t" x="676" y="152" text-anchor="middle">tokenize</text>
+        <path class="ln" d="M608,147 L628,147" marker-end="url(#a1)"/>
+
+        <rect class="bx-a" x="744" y="118" width="94" height="58" rx="4"/>
+        <text class="t-a" x="791" y="142" text-anchor="middle">model</text>
+        <text class="t-s" x="791" y="158" text-anchor="middle">8L × 8H × 512</text>
+        <path class="ln" d="M720,147 L740,147" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="632" y="196" width="206" height="32" rx="4"/>
+        <text class="t" x="735" y="216" text-anchor="middle">eval — generate, build, run</text>
+        <path class="ln-a" d="M791,176 L791,192" marker-end="url(#a2)"/>
+        <path class="ln-a" d="M632,212 L560,212 L560,172" marker-end="url(#a2)"/>
+
+        <rect class="bx" x="24" y="196" width="104" height="32" rx="4"/>
+        <text class="t" x="76" y="216" text-anchor="middle">golden set</text>
+        <path class="ln-r" d="M128,208 C168,208 178,150 190,148" marker-end="url(#a3)"/>
+      </svg>
+    </div>
+    <figcaption><b>FIG. 01</b> One sampled IR tree yields three views. Assembly and oracle meet in the verifier; only what survives reaches the corpus.</figcaption>
+  </figure>
+
+  <div class="note">
+    <p class="h">The property everything rests on</p>
+    <p><code>lower()</code> and <code>evaluate()</code> are <b>independent implementations of the same semantics</b> — one emits machine code, the other interprets in Python. Neither derives from the other, so a codegen bug surfaces as an execution mismatch. A verifier that ran the same code twice would prove nothing.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">02</span><span class="txt">The IR</span></h2>
+  <div class="prose">
+    <p><b>IR</b> — intermediate representation: a description of what a program <i>means</i>, held as a data structure rather than text. The same idea a compiler uses; <code>clang</code> parses C into an IR, optimises it, then emits machine code. This one has about a dozen node types where LLVM has hundreds.</p>
+    <p>The unit of training data is one object:</p>
+  </div>
+  <pre><code><span class="k">Loop</span>(op=<span class="o">'sum'</span>, lo=Const(2), hi=Const(20), pred=<span class="o">('even', 0)</span>, mapf=None, k=0)</code></pre>
+
+  <figure>
+    <div class="inner">
+      <svg viewBox="0 0 860 176" role="img" aria-label="The same IR object rendered three ways: as an English question, as fourteen AArch64 instructions, and as the value 110.">
+        <rect class="bx-a" x="14" y="62" width="176" height="52" rx="4"/>
+        <text class="t-a" x="102" y="84" text-anchor="middle">Loop(sum, 2, 20,</text>
+        <text class="t-a" x="102" y="100" text-anchor="middle">pred=even)</text>
+
+        <path class="ln-a" d="M190,80 C226,80 226,34 258,34" marker-end="url(#a2)"/>
+        <path class="ln-a" d="M190,88 L258,88" marker-end="url(#a2)"/>
+        <path class="ln-a" d="M190,96 C226,96 226,142 258,142" marker-end="url(#a2)"/>
+
+        <text class="t-s" x="200" y="48">render()</text>
+        <text class="t-s" x="200" y="112">lower()</text>
+        <text class="t-s" x="196" y="164">evaluate()</text>
+
+        <rect class="bx" x="262" y="16" width="584" height="36" rx="4"/>
+        <text class="t" x="276" y="39">"the sum of the even integers from 2 to 20"</text>
+
+        <rect class="bx" x="262" y="70" width="584" height="36" rx="4"/>
+        <text class="t" x="276" y="93">mov w1,#2 · cmp w1,w2 · and w4,w3,#1 · add w0,w0,w3 · …  (14 instructions)</text>
+
+        <rect class="bx" x="262" y="124" width="584" height="36" rx="4"/>
+        <text class="t-b" x="276" y="147">110</text>
+      </svg>
+    </div>
+    <figcaption><b>FIG. 02</b> Three derived views. Change <code>pred</code> to <code>odd</code> and all three change together.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>Written as three hand-maintained strings they would eventually drift, and across 20,000 programs some would be silently mislabelled. Derived from one object, <b>the question cannot describe something the code does not do</b>.</p>
+  </div>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Node</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td class="m">Const · Arg</td><td>a literal; an incoming argument</td></tr>
+      <tr><td class="m">Bin · Un</td><td>binary op (add sub mul and orr eor lsl lsr); unary (neg abs)</td></tr>
+      <tr><td class="m">Cmp · Sel</td><td>comparison yielding 0/1; if-then-else</td></tr>
+      <tr><td class="m">Loop</td><td>reduce(op, map(f, filter(pred, lo..hi)))</td></tr>
+      <tr><td class="m">ArrLoop</td><td>the same reduction over an array</td></tr>
+      <tr><td class="m">Arr · Index</td><td>a literal array; indexing it</td></tr>
+      <tr><td class="m">InArr · InLen</td><td>the caller's array — pointer in x0, length in w1</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">03</span><span class="txt">Grammar</span></h2>
+  <div class="prose">
+    <p>Mostly one form — <code>reduce(op, map(f, filter(pred, source)))</code> — with each axis chosen independently. That independence is the point: every axis is a word in the question that <i>changes the code</i>, so the qualifier must be read rather than ignored.</p>
+  </div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Axis</th><th>Values</th><th class="n">Count</th></tr></thead>
+    <tbody>
+      <tr><td class="m">reduce</td><td>sum · product · count · min · max</td><td class="n">5</td></tr>
+      <tr><td class="m">map</td><td>identity · square · double · <code>+k</code> · <code>×k</code> · constant <code>k</code></td><td class="n">6</td></tr>
+      <tr><td class="m">filter</td><td>none · even · odd · <code>&gt;k</code> · <code>&lt;k</code> · divisible by <code>k</code></td><td class="n">6</td></tr>
+      <tr><td class="m">source</td><td>integer range · literal array · caller's array</td><td class="n">3</td></tr>
+      <tr><td colspan="2"><b>with expression trees and conditionals</b></td><td class="n"><b>~5,200</b></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="prose">
+    <p>Two labels per program. <code>shape_of</code> encodes the whole subtree; <code>cell_of</code> records only the axis choices. The distinction matters for held-out splits — 91% of <i>shapes</i> occur exactly once, and a cell seen once cannot be withheld. <code>cell_of</code> yields ~420 cells with enough examples each to both train on and hold out.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">04</span><span class="txt">Register allocation</span></h2>
+  <div class="prose">
+    <p>Allocation threads an explicit next-free index. The invariant: a node lowered into <code>dst</code> with free index <i>f</i> may only touch <code>w{f}..w9</code>, and <code>dst</code> always sits below <i>f</i> — so evaluating the right operand can never clobber the left one already in <code>dst</code>.</p>
+  </div>
+  <div class="note bad">
+    <p class="h">Three earlier schemes, all wrong</p>
+    <p><b>Random registers</b> made the choice unpredictable from the question — pure noise in the training target. One template scored 54.5% because the model learned the dominant "reuse the register" pattern and emitted <code>ldr w1</code> twice, clobbering a value.</p>
+    <p><b>One fixed register</b> removed the noise but made the store block so uniform that the model stopped tracking position, and array indexing collapsed to a single constant offset.</p>
+    <p><b>Depth-derived</b> collided: lowering <code>and(251, w1)</code> into <code>w1</code> allocated its right operand at the same depth, emitting <code>mov w1,#251 / mov w1,w11 / and w1,w1,w1</code> and losing the left operand silently. Parity tests missed it — no original template ever nested an expression inside a comparison.</p>
+  </div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Register</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td class="m">w0</td><td>result; also the first scalar argument</td></tr>
+      <tr><td class="m">x0 / w1</td><td>array pointer and length on entry</td></tr>
+      <tr><td class="m">x10 / w11</td><td>the array pointer and length, parked</td></tr>
+      <tr><td class="m">w12 · w13</td><td>scalar arguments, parked clear of temporaries</td></tr>
+      <tr><td class="m">w1 – w9</td><td>expression temporaries</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">05</span><span class="txt">Verification</span></h2>
+
+  <figure>
+    <div class="inner">
+      <svg viewBox="0 0 860 234" role="img" aria-label="Sixty programs compile into one binary; each writes a pass or fail byte as it finishes. If a program hangs, the next missing byte identifies it and the remainder is re-run.">
+        <rect class="bx" x="14" y="86" width="96" height="56" rx="4"/>
+        <text class="t" x="62" y="108" text-anchor="middle">60 programs</text>
+        <text class="t-s" x="62" y="124" text-anchor="middle">+ 12 inputs ea.</text>
+
+        <path class="ln" d="M110,114 L142,114" marker-end="url(#a1)"/>
+
+        <rect class="bx-a" x="146" y="80" width="110" height="68" rx="4"/>
+        <text class="t-a" x="201" y="104" text-anchor="middle">ONE binary</text>
+        <text class="t-s" x="201" y="120" text-anchor="middle">clang, 1 build</text>
+        <text class="t-s" x="201" y="134" text-anchor="middle">1 exec</text>
+
+        <path class="ln" d="M256,114 L292,114" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="296" y="86" width="120" height="56" rx="4"/>
+        <text class="t" x="356" y="108" text-anchor="middle">watchdog</text>
+        <text class="t-s" x="356" y="124" text-anchor="middle">progress, not time</text>
+
+        <path class="ln" d="M416,114 L452,114" marker-end="url(#a1)"/>
+
+        <text class="t-s" x="456" y="80">stdout, one byte per program</text>
+        <g font-family="ui-monospace,monospace" font-size="15" fill="#4d6b22">
+          <text x="458" y="112">. . . . . . . . . .</text>
+          <text x="596" y="112" fill="#a3392a">F</text>
+          <text x="612" y="112">. . . . .</text>
+        </g>
+        <rect x="452" y="94" width="238" height="26" rx="3" fill="none" stroke="#c8bcae" stroke-width="1.2"/>
+
+        <path class="ln-r" d="M690,107 L724,107" marker-end="url(#a3)"/>
+        <rect class="bx" x="728" y="82" width="118" height="52" rx="4"/>
+        <text class="t" x="787" y="103" text-anchor="middle">stream stops</text>
+        <text class="t-s" x="787" y="119" text-anchor="middle">→ next one hung</text>
+
+        <path class="ln-r" d="M787,134 L787,178 L201,178 L201,152" marker-end="url(#a3)"/>
+        <text class="t-s" x="494" y="196" text-anchor="middle">charge the culprit, rebuild and re-run the remainder — its 59 neighbours are not blamed</text>
+      </svg>
+    </div>
+    <figcaption><b>FIG. 03</b> Batched verification. One binary per 60 programs; an unbuffered byte per program makes a hang attributable.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p><b>Why batch.</b> On macOS the first execution of a freshly built binary pays a code-signing check of roughly 0.45s, serialised machine-wide — one process per program is unusably slow, and threads do not help. Batching took full-corpus verification from <b>323s for 600 programs to 34s for 20,000</b>.</p>
+    <p><b>Why one byte each.</b> <code>_write</code> is unbuffered, so if the binary is killed the bytes already received say exactly how many programs finished — the next is the one that hung. Without it, a single non-terminating program fails 59 innocent neighbours.</p>
+  </div>
+
+  <div class="note warn">
+    <p class="h">Detection is based on progress, not elapsed time</p>
+    <p>A fixed deadline cannot tell "hung" from "slow to start" when the OS is serialising code-signing checks across parallel workers. An early version used a 3-second timeout and entered a death spiral — healthy batches charged as hangs, retried, more fresh binaries, longer queue. Caught at <b>round 205</b>. The watchdog now waits 30s for the <i>first</i> byte, then requires a new byte every 5s.</p>
+  </div>
+
+  <h3>Property testing</h3>
+  <div class="prose">
+    <p>Each program is called with ~12 input vectors — edges first (empty array, single element, <code>lo == hi</code>, <code>lo &gt; hi</code>, negatives, all-equal, sorted), then random. <b>Correct means every vector matches.</b></p>
+  </div>
+  <div class="pull">
+    <p>Single-input scoring called a hardcoded <code>ldr w0, [sp, #4]</code> a working “find the largest element” — index 1 happened to hold the maximum.</p>
+    <p class="src">It overstated accuracy by 8 points, and overstated it most on the shapes that were most broken.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">06</span><span class="txt">Golden set</span></h2>
+  <div class="prose">
+    <p>Execution validates the code against the oracle. It cannot validate either against the <i>question</i> — if the IR's meaning is misunderstood, both inherit the mistake, agree perfectly, and verification goes green on a mislabelled example. This happened twice:</p>
+    <ul>
+      <li>A nested expression rendered as <code>"21 plus 95 times 42"</code> — by ordinary precedence 21+(95×42), while the tree meant (21+95)×42.</li>
+      <li>An array loop with a filter rendered <i>identically</i> to one without, silently dropping the word that changed the code.</li>
+    </ul>
+    <p>68 cases whose expected values <b>and question text</b> were worked out by hand and never derived from the generator. The only hand-checked part of the system, and it covers all three views.</p>
+  </div>
+  <pre><code>$ .venv/bin/python arm/golden.py
+<span class="o">oracle vs hand-written:        44/44 agree
+compiled code vs hand-written: 44/44 agree
+question text vs hand-written:   7/7 agree
+array cases vs hand-written:   34/34 agree
+GOLDEN SET PASSES</span></code></pre>
+</section>
+
+<section>
+  <h2><span class="num">07</span><span class="txt">Tokenizer</span></h2>
+  <div class="prose">
+    <p>Assembly has a genuinely finite vocabulary, so tokens are matched by regex, longest-first, with <b>no BPE and no learned merges</b>. 390 tokens, fully reversible — and unknown input raises rather than being silently dropped.</p>
+  </div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Decision</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>mnemonics &amp; registers atomic</td><td><code>mov</code> and <code>b.ge</code> are one token each — the model cannot emit <code>mvo</code> or a malformed register <i>at all</i></td></tr>
+      <tr><td>digits kept separate</td><td>copying a number from question to answer is a task over 10 symbols; <code>#48291</code> works although it appears nowhere in the corpus</td></tr>
+      <tr><td>separators absorbed</td><td>bare spaces and indents were 26% of all tokens; folding them in took 89 → 68 tokens per example</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">08</span><span class="txt">Model</span></h2>
+
+  <figure>
+    <div class="inner">
+      <svg viewBox="0 0 860 250" role="img" aria-label="Token and position embeddings feed eight pre-norm residual blocks, each with attention then an MLP, ending in a layer norm and a linear head producing 390 logits.">
+        <rect class="bx" x="14" y="102" width="86" height="46" rx="4"/>
+        <text class="t" x="57" y="122" text-anchor="middle">tokens</text>
+        <text class="t-s" x="57" y="137" text-anchor="middle">32 × 384</text>
+        <path class="ln" d="M100,125 L128,125" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="132" y="96" width="104" height="58" rx="4"/>
+        <text class="t" x="184" y="118" text-anchor="middle">embed +</text>
+        <text class="t" x="184" y="134" text-anchor="middle">position</text>
+        <path class="ln" d="M236,125 L266,125" marker-end="url(#a1)"/>
+
+        <rect class="bx-d" x="270" y="30" width="330" height="190" rx="4"/>
+        <text class="t-s" x="284" y="48">× 8 BLOCKS — PRE-NORM RESIDUAL</text>
+
+        <rect class="bx" x="286" y="62" width="76" height="34" rx="4"/>
+        <text class="t-s" x="324" y="83" text-anchor="middle">LayerNorm</text>
+        <rect class="bx-a" x="376" y="62" width="126" height="34" rx="4"/>
+        <text class="t-a" x="439" y="83" text-anchor="middle">attention</text>
+        <text class="t-s" x="516" y="83">⊕</text>
+        <path class="ln" d="M362,79 L372,79" marker-end="url(#a1)"/>
+        <path class="ln" d="M502,79 L512,79" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="286" y="132" width="76" height="34" rx="4"/>
+        <text class="t-s" x="324" y="153" text-anchor="middle">LayerNorm</text>
+        <rect class="bx" x="376" y="132" width="126" height="34" rx="4"/>
+        <text class="t" x="439" y="153" text-anchor="middle">MLP 512→2048</text>
+        <text class="t-s" x="516" y="153">⊕</text>
+        <path class="ln" d="M362,149 L372,149" marker-end="url(#a1)"/>
+        <path class="ln" d="M502,149 L512,149" marker-end="url(#a1)"/>
+
+        <path class="ln" d="M278,79 L282,79" marker-end="url(#a1)"/>
+        <path class="ln" d="M522,79 L560,79 L560,112" marker-end="url(#a1)"/>
+        <path class="ln" d="M560,120 L560,149 L522,149"/>
+        <path class="ln" d="M278,110 L278,149 L282,149" marker-end="url(#a1)"/>
+        <text class="t-s" x="330" y="188">attention moves information BETWEEN positions</text>
+        <text class="t-s" x="330" y="204">the MLP works on each position alone</text>
+
+        <path class="ln" d="M600,125 L630,125" marker-end="url(#a1)"/>
+        <rect class="bx" x="634" y="102" width="92" height="46" rx="4"/>
+        <text class="t-s" x="680" y="122" text-anchor="middle">LayerNorm</text>
+        <text class="t-s" x="680" y="137" text-anchor="middle">+ linear</text>
+        <path class="ln" d="M726,125 L754,125" marker-end="url(#a1)"/>
+        <rect class="bx-a" x="758" y="102" width="88" height="46" rx="4"/>
+        <text class="t-a" x="802" y="122" text-anchor="middle">390 logits</text>
+        <text class="t-s" x="802" y="137" text-anchor="middle">per position</text>
+      </svg>
+    </div>
+    <figcaption><b>FIG. 04</b> 8 layers × 8 heads × 512 dims. Attention is the only operation that moves information between positions.</figcaption>
+  </figure>
+
+  <pre><code>q, k, v = self.qkv(x).split(n_embd, dim=2)     <span class="c">one matmul → three (B,T,512)</span>
+q, k, v = [t.view(B,T,8,64).transpose(1,2) …]  <span class="c">(B, 8 heads, T, 64)</span>
+y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
+
+<span class="c">attention(Q,K,V) = softmax( (Q·Kᵀ) × scale + causal_mask ) · V</span></code></pre>
+
+  <div class="prose">
+    <ul>
+      <li><b>scale = 1/√64 = 0.125</b> — head size, not model width. An earlier version used 1/√512, dividing logits by 22.6 instead of 8 and flattening every softmax.</li>
+      <li><b>is_causal</b> masks everything above the diagonal, which makes next-token prediction a valid signal on all 384 positions at once.</li>
+      <li><b>fused QKV</b> replaced 3 matmuls per head inside a Python loop — identical math (max logit difference 1.55e-05), step time 924ms → 360ms.</li>
+    </ul>
+  </div>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Component</th><th class="n">Share</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>feed-forward</td><td class="n">65%</td><td>8 × (512→2048→512), GELU</td></tr>
+      <tr><td>attention</td><td class="n">33%</td><td>fused qkv + output projection</td></tr>
+      <tr><td>embeddings · head · norms</td><td class="n">2%</td><td>nearly free — the vocabulary is 390, not 50,000</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p class="h">KV cache — 6.4× measured</p>
+    <p>Causal masking guarantees an earlier position's keys and values never change once computed. Without a cache, every step recomputes the whole prefix and discards it: generating 300 tokens after a 60-token prompt processes 62,850 token-positions instead of 360. The <i>positions</i> ratio is 175×; measured wall-clock is <b>2.56s → 0.40s</b>, because at this size per-step dispatch overhead dominates the arithmetic the cache removes. Output is byte-identical either way.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">09</span><span class="txt">Evaluation</span></h2>
+
+  <figure>
+    <div class="inner">
+      <svg viewBox="0 0 860 190" role="img" aria-label="A funnel: 100 percent parse, 100 percent link, and 83 percent compute the correct value on every input.">
+        <rect class="bx" x="14" y="72" width="112" height="46" rx="4"/>
+        <text class="t" x="70" y="92" text-anchor="middle">question</text>
+        <text class="t-s" x="70" y="107" text-anchor="middle">held out</text>
+        <path class="ln" d="M126,95 L156,95" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="160" y="72" width="120" height="46" rx="4"/>
+        <text class="t" x="220" y="92" text-anchor="middle">greedy decode</text>
+        <text class="t-s" x="220" y="107" text-anchor="middle">no sampling</text>
+        <path class="ln" d="M280,95 L310,95" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="314" y="72" width="112" height="46" rx="4"/>
+        <text class="t" x="370" y="92" text-anchor="middle">ends with ret</text>
+        <text class="t-a" x="370" y="107" text-anchor="middle">100%</text>
+        <path class="ln" d="M426,95 L456,95" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="460" y="72" width="120" height="46" rx="4"/>
+        <text class="t" x="520" y="92" text-anchor="middle">clang LINKS</text>
+        <text class="t-a" x="520" y="107" text-anchor="middle">100%</text>
+        <path class="ln" d="M580,95 L610,95" marker-end="url(#a1)"/>
+
+        <rect class="bx" x="614" y="66" width="118" height="58" rx="4"/>
+        <text class="t" x="673" y="88" text-anchor="middle">run, 12 inputs</text>
+        <text class="t-s" x="673" y="103" text-anchor="middle">all must match</text>
+        <path class="ln-a" d="M732,95 L762,95" marker-end="url(#a2)"/>
+
+        <rect class="bx-a" x="766" y="66" width="80" height="58" rx="4"/>
+        <text class="t-a" x="806" y="90" text-anchor="middle">correct</text>
+        <text class="t-b" x="806" y="108" text-anchor="middle">83%</text>
+
+        <text class="t-s" x="520" y="150" text-anchor="middle">linking, not merely assembling — `b loop` with no `loop:` label assembles fine and fails only at link</text>
+      </svg>
+    </div>
+    <figcaption><b>FIG. 05</b> The eval funnel on held-out combinations. Everything parses and links; correctness is where the signal is.</figcaption>
+  </figure>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Metric</th><th>Held out</th><th class="n">Result</th></tr></thead>
+    <tbody>
+      <tr><td class="m">seen</td><td>nothing — trained shapes, new constants</td><td class="n">90.5%</td></tr>
+      <tr><td class="m">combo</td><td>whole grammar cells; each axis value still trained elsewhere</td><td class="n">83.0%</td></tr>
+      <tr><td class="m">size</td><td>input lengths — trained ≤ 8, tested at 12 and 16</td><td class="n">86.0%</td></tr>
+      <tr><td class="m">facts</td><td>instruction-set questions, exact match</td><td class="n">95.0%</td></tr>
+      <tr><td class="m">depth</td><td>nesting one level deeper than training</td><td class="n">5.5%</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <p class="h">Validation loss is not used as a success metric</p>
+    <p>In one run it went flat at step 1,000 (0.270 → 0.243) while execution accuracy climbed from 37% to 95%. Watching loss alone, that run looked converged 3,000 steps before it was.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">10</span><span class="txt">What scales</span></h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Lever</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>more parameters</td><td>composition 30% → 63.5% → 82% across 1.9M → 10.9M → 25.5M, still climbing</td></tr>
+      <tr><td>KV cache</td><td>generation 2.56s → 0.40s, byte-identical output</td></tr>
+      <tr><td>fused attention</td><td>step time 924ms → 360ms, verified identical math</td></tr>
+      <tr><td>decomposition</td><td>+9 points at 10.9M, <b>nothing at 25.5M</b> — a capacity aid, not a free win</td></tr>
+      <tr><td>deeper training data</td><td>no effect on depth extrapolation</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="pull">
+    <p>Asked for an expression one level deeper than training, it emits valid, compiling code that is systematically <i>too short</i> — a depth-3 program for a depth-4 question.</p>
+    <p class="src">Move the ceiling from 3 to 4 and the failure moves to 5. It learned a maximum depth, not a recursion.</p>
+  </div>
+
+  <div class="prose">
+    <p>The decomposition experiment localised it precisely: given a scratchpad to write the steps out first, on deep problems the model produced a correct decomposition <b>0.0%</b> of the time, and even the right <i>number</i> of steps only 24.7%. It cannot break down a deep problem, because breaking it down is itself the recursive act.</p>
+    <p>Untried and likely worthwhile: cosine LR decay with warmup — the observed 85 → 66 → 93 oscillation at flat loss is what a too-high late learning rate looks like; masking loss to the answer only, since about a third of each step is spent predicting prompts; rotary position embeddings, because learned absolute ones cannot extrapolate past <code>block_size</code>; and giving the question renderer several wordings per operation, the single largest usability gap today.</p>
+  </div>
+</section>
+
+<footer>
+  <a href="https://github.com/yashodeepv/baby-programmer-small-language-model">github.com/yashodeepv/baby-programmer-small-language-model</a>
+</footer>
+
+</div>
+
+</body>
+</html>
