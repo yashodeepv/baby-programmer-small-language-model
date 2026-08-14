@@ -1,629 +1,505 @@
-# BabyProgrammer SLM
+# baby-programmer
 
-A Small Language Model (~10.91M parameters) built completely from scratch using PyTorch.
-It learns Java programming and CS fundamentals through a progressive curriculum —
-starting from basic variable declarations all the way to algorithms and data structures.
+A **25.8M-parameter** language model that writes AArch64 assembly from plain-English
+descriptions and answers basic questions about the instruction set — trained
+entirely on a corpus where **every single example was compiled and executed
+before it was allowed to become training data**.
 
-Knowledge is distilled from a large local teacher model (Qwen3-Coder via Ollama)
-into the small BabyProgrammer brain using a technique called **knowledge distillation**.
+No scraped code. No assumed-correct labels. 26,000 programs, ~312,000 executions,
+zero unverified samples.
+
+```
+USER: Work out how many of the elements of the array that are divisible by 4;
+      the answer belongs in w0. The array pointer is in x0 and its length in w1.
+
+ASSISTANT:
+    mov x10, x0
+    mov w11, w1
+    mov w1, #0
+    mov w2, w11
+    mov w0, #0
+loop1:
+    cmp w1, w2
+    b.ge done2
+    ldr w3, [x10, w1, uxtw #2]
+    and w4, w3, #3
+    cmp w4, #0
+    b.ne skip3
+    add w0, w0, #1
+skip3:
+    add w1, w1, #1
+    b loop1
+done2:
+    ret
+```
+
+That program is correct on every test input, at array lengths the model never
+saw during training.
 
 ---
 
-## Current Benchmark (v0.1 checkpoint)
+## Results
 
-Evaluated with `python test_baby.py` — 25 questions across 5 Java curriculum stages,
-tested at temperature 0.8 with 150 generated tokens per answer.
+Measured by **compiling and running** the model's output against a reference
+oracle on ~12 inputs each. A program counts as correct only if **every** input
+matches.
 
-| Stage | Score | % | Status |
-|---|---|---|---|
-| Stage 1: Variables & Types | 4/5 | 80% | |
-| Stage 2: Control Flow | 1/5 | 20% | Needs work |
-| Stage 3: Methods & Arrays | 5/5 | 100% | |
-| Stage 4: OOP | 1/5 | 20% | Needs work |
-| Stage 5: Advanced Topics | 1/5 | 20% | Needs work |
-| **Overall** | **12/25** | **48%** | **Grade: C** |
+| Evaluation | What it tests | Builds | Correct |
+|---|---|---:|---:|
+| **seen** | trained program shapes, new constants | 100% | **90.5%** |
+| **combo** | *unseen combinations* of trained operations | 100% | **83.0%** |
+| **size** | trained on arrays ≤ 8, tested at 12 and 16 | 100% | **86.0%** |
+| **facts** | held-out questions about the ISA | — | **95.0%** |
+| **depth** | expressions nested deeper than any in training | 98.5% | **5.5%** |
 
-**Vocab:** 89 characters &nbsp;|&nbsp; **Device:** CUDA &nbsp;|&nbsp; **Params:** ~10.91M
-
-> **Grade C** — Baby is learning. Weak areas (control flow, OOP, advanced topics) improve
-> with additional Qwen3-Coder distillation rounds via `auto_train_v2.py`.
-
-<details>
-<summary>Sample outputs from this checkpoint</summary>
-
-**PASS — Variables (4/4 keywords)**
-```
-Q: How do you declare a double variable named price set to 9.99?
-A: double price = 9.99;
-```
-
-**PASS — Arrays (4/4 keywords)**
-```
-Q: How do you declare an int array of size 5 in Java?
-A: int[] arr = new int[5];
-```
-
-**FAIL — Control Flow (0/4 keywords)**
-```
-Q: Write a switch statement for an integer day with cases 1 and 2 in Java.
-A: StringBuilder suflo is of a gent is an abstract class can halve define...
-```
-
-**FAIL — OOP (0/4 keywords)**
-```
-Q: How does a Dog class extend an Animal class in Java?
-A: An algorithm is the decimal varial of a number revent nite a stop...
-```
-</details>
+Three of those are the headline. `combo` says it composes operations it was
+never shown together. `size` says it learned an *algorithm*, not a per-length
+template. `depth` is the honest failure, documented in
+[Known limits](#known-limits).
 
 ---
 
-## Project Structure
+## Quickstart
 
+```bash
+python3.11 -m venv .venv && .venv/bin/pip install torch
+
+# generate and verify a corpus (every program compiled + executed)
+.venv/bin/python arm/build_corpus.py --n 20000 --out data/comp_corpus.txt
+
+# prove the generator agrees with hand-written ground truth
+.venv/bin/python arm/golden.py
+
+# train
+.venv/bin/python arm/train_comp.py --steps 3000 --n-embd 512 --n-head 8 \
+    --n-layer 8 --facts 2500 --tag mymodel
 ```
-BabyProgrammer/
-|
-|-- README.md              This file
-|-- model.py               The BabyProgrammer architecture + checkpoint utilities
-|-- train_corpus.py        Phase 1: teach Java syntax from hand-crafted Q&A pairs
-|-- auto_train_v2.py       Phase 2: distill Qwen3-Coder knowledge via Ollama
-|-- test_baby.py           Evaluation suite — 25 questions across all 5 stages
-|
-|-- data/
-    |-- java_corpus.txt              ~150 hand-crafted USER/ASSISTANT Java Q&A pairs
-    |
-    |-- curriculum_configs/          Staged lesson prompts fed to Qwen during distillation
-        |-- 01_variables_and_types.txt   ~40 prompts  (primitives, operators, strings)
-        |-- 02_control_flow.txt          ~35 prompts  (if/else, loops, break/continue)
-        |-- 03_methods_and_arrays.txt    ~50 prompts  (methods, recursion, arrays)
-        |-- 04_oop_basics.txt            ~50 prompts  (classes, inheritance, interfaces)
-        |-- 05_advanced_topics.txt       ~70 prompts  (algorithms, data structures, Big O)
+
+Requires `clang` (ships with Xcode command line tools) — the corpus is verified
+by actually assembling and running it.
+
+---
+
+## Try it yourself
+
+`arm/ask.py` talks to the trained model directly. With `--run` it assembles what
+the model wrote, executes it, and prints the value actually left in `w0`.
+
+```bash
+# a factual question
+.venv/bin/python arm/ask.py "What does the cset instruction do?"
+
+# generate code, run it, and check against what you expect
+.venv/bin/python arm/ask.py --run --expect 110 \
+  "Compute the sum of the even integers from 2 to 20, leaving the result in w0."
+
+# array questions: supply the input data
+.venv/bin/python arm/ask.py --run --array 4,9,2,7,30 --expect 52 \
+  "Compute the sum of the elements of the array, leaving the result in w0. \
+   The array pointer is in x0 and its length in w1."
+
+# scalar arguments
+.venv/bin/python arm/ask.py --run --args 12,188 --expect 188 \
+  "Compute w0 if w0 is at least w1, otherwise w1, leaving the result in w0. \
+   The inputs are in w0, w1."
+
+# interactive; prefix a question with ! to also run it
+.venv/bin/python arm/ask.py
+```
+
+### Verified examples
+
+Every one of these was run against the shipped checkpoint:
+
+| Question | Expected | Result |
+|---|---:|:--|
+| sum of the even integers from 2 to 20 | 110 | **PASS** |
+| product of the odd integers from 2 to 20 | 654,729,075 | **PASS** |
+| sum of the squares of the integers from 1 to 5 | 55 | **PASS** |
+| sum of the elements of `[4,9,2,7,30]` | 52 | **PASS** |
+| largest of the elements of `[3,17,8,12]` | 17 | **PASS** |
+| how many elements of `[4,20,11,9,30]` exceed 10 | 3 | **PASS** |
+
+The product case is worth noting: nine digits, composed from `product` × `odd`
+× a range, correct exactly. `--run` reports the full 32-bit result — an earlier
+version read the value from the process exit status, which is only the low byte
+and reported 115 instead of 654,729,075. The model was right; the read-out was
+lying.
+
+### Phrase questions the way the corpus does
+
+**This matters, and it is a real limitation.** The 16 surface phrasings vary
+only the *wrapper* — "Compute X…", "I need X…", "Emit code for X…". The **body**
+that names the operation has exactly one rendering. Stray from it and the model
+matches the nearest familiar shape and silently substitutes a different
+operation:
+
+| use this | not this |
+|---|---|
+| `the sum of the elements of the array` | "Sum the array" |
+| `the largest of the elements of the array` | "Find the max" |
+| `the sum of the even integers from 2 to 20` | "Add up the evens up to 20" |
+| `how many of the elements of the array that are greater than 10` | "Count elements over 10" |
+
+Asked *"Sum the elements of the array"*, the model produced a max-with-filter
+loop and returned a wrong answer without any sign of confusion. Giving `show()`
+in `ir.py` several renderings per node — the treatment the wrapper already got —
+is the highest-value remaining fix.
+
+To see the exact forms it knows:
+
+```bash
+.venv/bin/python -c "
+import sys; sys.path.insert(0,'arm')
+import grammar; from ir import question
+for p in grammar.sample(12, seed=7): print(question(p))"
 ```
 
 ---
 
-## Architecture Overview
+## The core idea: one IR, three views
 
-BabyProgrammer is a **decoder-only Transformer** — the same family of architecture
-that powers modern language models like GPT. It is a character-level model, meaning
-it processes and generates one character at a time rather than word tokens.
-
-```mermaid
-flowchart TD
-    A(["📝 Input Text\n(character sequence)"]):::input
-    B["🔤 Token Embedding\nchar → 384-dim vector"]:::layer
-    C["📍 Position Embedding\npositions 0 – 255"]:::layer
-    D(["➕ Add & Stack"]):::add
-
-    A --> B
-    B --> D
-    C --> D
-
-    subgraph BLOCK ["🔁  Transformer Block  ×  6"]
-        direction TB
-        LN1["LayerNorm"]:::norm
-        ATT["🧠 Multi-Head Attention\n6 heads · 64 dims each\ncausal mask — looks backward only"]:::attn
-        R1(["➕ Residual"]):::add
-        LN2["LayerNorm"]:::norm
-        FFN["⚡ Feed-Forward Network\n384 → 1536 → GELU → 384"]:::ffn
-        R2(["➕ Residual"]):::add
-
-        LN1 --> ATT --> R1 --> LN2 --> FFN --> R2
-    end
-
-    D --> LN1
-    R2 --> LN_F
-
-    LN_F["LayerNorm"]:::norm
-    PROJ["🎯 Linear Projection\n→ vocab logits  (89 chars)"]:::layer
-    OUT(["🔮 Softmax → next character\nprobabilities"]):::output
-
-    LN_F --> PROJ --> OUT
-
-    classDef input  fill:#4A90D9,stroke:#2c5f8a,color:#fff,rx:8
-    classDef layer  fill:#2D6A4F,stroke:#1b4332,color:#fff
-    classDef norm   fill:#6B4C9A,stroke:#432874,color:#fff
-    classDef attn   fill:#C0392B,stroke:#922b21,color:#fff
-    classDef ffn    fill:#D35400,stroke:#a04000,color:#fff
-    classDef add    fill:#555,stroke:#333,color:#fff,rx:20
-    classDef output fill:#1A7A4A,stroke:#0f4d2d,color:#fff,rx:8
-```
-
-**Fixed architecture spec** — do not change these after the first checkpoint is saved:
-
-| Parameter    | Value   | Meaning                         |
-|--------------|---------|---------------------------------|
-| `N_EMBD`     | 384     | Embedding dimension             |
-| `N_HEAD`     | 6       | Attention heads per block       |
-| `N_LAYER`    | 6       | Number of transformer blocks    |
-| `BLOCK_SIZE` | 256     | Max context length (characters) |
-| `DROPOUT`    | 0.2     | Regularization dropout rate     |
-| Parameters   | ~10.91M | Total trainable weights         |
-
-> All scripts import the model from `model.py`. Never copy-paste the architecture.
-
----
-
-## The Training Pipeline
-
-Training happens in two sequential phases:
+The unit of data is not a string. It is a sampled **IR tree** — an
+*intermediate representation*, the same concept a compiler uses internally.
+Everything else is derived from that one object.
 
 ```mermaid
 flowchart LR
-    subgraph P1 ["⚙️  Phase 1 — Syntax Imprinting  (train_corpus.py)"]
-        direction LR
-        CORP["📄 java_corpus.txt\n~150 hand-crafted Q&A pairs"]:::data
-        T1["🏋️ train_corpus.py\n20 000 steps · AdamW\n~30–60 min on RTX 4060"]:::script
-        CORP --> T1
-    end
-
-    T1 --> CKPT
-
-    subgraph P2 ["🧬  Phase 2 — Knowledge Distillation  (auto_train_v2.py)"]
-        direction LR
-        CURR["📚 curriculum_configs/\n250 lesson prompts"]:::data
-        QWEN["🤖 Qwen3-Coder 30B\nteacher model via Ollama"]:::teacher
-        MASK["🎯 Masked Training Step\ngradients on ASSISTANT tokens only"]:::script
-        CURR --> QWEN --> MASK
-    end
-
-    CKPT[(baby_programmer.pth\n10.91 M params)]:::ckpt
-    MASK --> CKPT
-
-    classDef data    fill:#2D6A4F,stroke:#1b4332,color:#fff
-    classDef script  fill:#4A90D9,stroke:#2c5f8a,color:#fff
-    classDef teacher fill:#C0392B,stroke:#922b21,color:#fff
-    classDef ckpt    fill:#6B4C9A,stroke:#432874,color:#fff
+    G[grammar.py<br/>samples a structure] --> IR["<b>IR tree</b><br/>Loop(op='sum', lo=2, hi=20,<br/>pred=('even',0))"]
+    IR -->|render| Q["<b>the question</b><br/>“Sum the even integers<br/>from 2 to 20”"]
+    IR -->|lower| A["<b>the label</b><br/>AArch64 with real<br/>register allocation"]
+    IR -->|evaluate| O["<b>the oracle</b><br/>110"]
+    Q --> C[training corpus]
+    A --> C
+    O --> V[verifier]
 ```
+
+Why this matters: written as three separate strings, the question, the code and
+the expected answer can disagree — and across 20,000 programs, some would.
+Because all three are derived from one `Loop(...)`, **the question cannot
+describe something the code does not do**. Change `pred` to `('odd', 0)` and the
+sentence, the branch instruction and the answer all change together.
+
+`lower()` and `evaluate()` are **independent implementations** of the same
+semantics — one emits machine code, the other interprets in Python. Neither is
+derived from the other, so a codegen bug shows up as an execution mismatch. A
+verifier that ran the same code twice would prove nothing.
 
 ---
 
-## Phase 1: Corpus Training (`train_corpus.py`)
-
-### What it does
-
-Trains BabyProgrammer directly on `data/java_corpus.txt` — a file containing
-~150 hand-crafted Q&A pairs in the exact format the model uses:
-
-```
-USER: How do you declare an int variable named score with value 100?
-ASSISTANT: int score = 100;
-
-USER: How do you write a for loop from 1 to 10?
-ASSISTANT: for (int i = 1; i <= 10; i++) { System.out.println(i); }
-
-USER: How do you write a recursive method for factorial?
-ASSISTANT: public static int factorial(int n) { if (n <= 1) return 1; return n * factorial(n - 1); }
-```
-
-### Why this step is critical
-
-Without this step, the model has only seen textbook prose (English sentences).
-It has almost no exposure to Java syntax — no `{`, `;`, `return`, `extends`, `for`.
-This corpus teaches the model:
-
-- The `USER: ... \nASSISTANT: ...` Q&A format it must follow
-- All core Java keywords and symbols in meaningful context
-- The association between questions and correct code answers
-
-### Step-by-step walkthrough
-
-**Step 1 — Load and tokenize the corpus**
-
-```python
-with open(CORPUS_PATH, 'r', encoding='utf-8') as f:
-    text = f.read()
-
-chars      = sorted(set(text))                        # all unique characters
-vocab_size = len(chars)                               # e.g. 95 chars
-stoi       = {ch: i for i, ch in enumerate(chars)}   # char -> integer index
-itos       = {i: ch for i, ch in enumerate(chars)}   # integer index -> char
-```
-
-The entire corpus is flattened into a sequence of integers.
-`"int"` might become `[47, 56, 62]` depending on the sorted character order.
-This integer sequence is what the model actually trains on.
-
-**Step 2 — Split train / validation**
-
-```python
-n = int(0.95 * len(data))
-train_data, val_data = data[:n], data[n:]
-```
-
-95% trains the model. 5% is held out as a validation set to detect overfitting.
-The corpus is small (~15,000 chars) so most goes to training.
-
-**Step 3 — Load or warm-start the model**
-
-```python
-if os.path.exists(MODEL_PATH):
-    model = bridge_weights(MODEL_PATH, vocab_size, stoi)
-else:
-    model = BabyProgrammer(vocab_size).to(device)
-```
-
-If a checkpoint already exists, the **bilingual bridge** transfers its weights into
-the new vocabulary. Characters that exist in both old and new vocab keep their
-learned embeddings. New characters start from zero.
-
-If no checkpoint exists, the model starts with random weights.
-
-**Step 4 — Batch sampling**
-
-```python
-def get_batch(data, block_size, batch_size):
-    ix = torch.randint(len(data) - block_size, (batch_size,))
-    x  = torch.stack([data[i     : i + block_size    ] for i in ix])
-    y  = torch.stack([data[i + 1 : i + block_size + 1] for i in ix])
-    return x.to(device), y.to(device)
-```
-
-Each step draws 32 random windows of 256 characters from the corpus.
-`x` is the input, `y` is the same window shifted one position right.
-The model's goal: given `x`, predict `y` — i.e., predict the next character.
-
-**Step 5 — The training loop**
-
-```python
-for step in range(MAX_ITERS):       # 20,000 steps
-    xb, yb = get_batch(...)
-    _, loss = model(xb, yb)         # forward pass computes cross-entropy loss
-    optimizer.zero_grad(set_to_none=True)
-    loss.backward()                 # backpropagate gradients through all layers
-    optimizer.step()                # update weights with AdamW
-```
-
-**Cross-entropy loss** measures how surprised the model is by the correct next character.
-
-```
-loss ~4.5  →  guessing randomly (1/95 chars ≈ chance)
-loss ~2.5  →  has learned basic patterns
-loss ~1.5  →  confidently predicting most characters correctly  (target)
-loss ~1.0  →  strong memorization of the corpus
-```
-
-**Step 6 — Checkpoint and sanity generation**
-
-Every 1,000 steps the checkpoint is saved to `baby_programmer.pth`.
-At the end, three test prompts are generated so you can spot-check the output.
-
-### Expected loss curve
-
-```
-Step      0  |  train ~4.50  val ~4.50   (random guessing)
-Step   1000  |  train ~2.80  val ~2.90
-Step   5000  |  train ~1.80  val ~1.95
-Step  10000  |  train ~1.40  val ~1.60
-Step  20000  |  train ~1.10  val ~1.40   (good target)
-```
-
-### How to run
-
-```bash
-python train_corpus.py
-```
-
----
-
-## Phase 2: Knowledge Distillation (`auto_train_v2.py`)
-
-### What it does
-
-Uses **Qwen3-Coder** (a 30B expert model running locally via Ollama) as a teacher.
-For each topic in the curriculum the teacher generates a perfect training example.
-BabyProgrammer then trains directly on that example — focusing only on the answer.
-
-This is **knowledge distillation**: a large capable model transfers its knowledge
-into a much smaller model by producing high-quality training data on demand.
+## How the training corpus is created
 
 ```mermaid
 flowchart TD
-    PROMPT(["📋 Curriculum Prompt\n(topic from lesson file)"]):::input
-
-    subgraph TEACHER ["🤖 Teacher  —  Qwen3-Coder 30B  (Ollama)"]
-        GEN["Generates a complete\nUSER / ASSISTANT Q&A pair"]:::teacher
-    end
-
-    subgraph PAIR ["📝 Generated Training Example"]
-        direction LR
-        Q["USER:\nHow do you write a for-loop?"]:::question
-        ANS["ASSISTANT:\nfor (int i=0; i<n; i++) { ... }"]:::answer
-        Q -.-> ANS
-    end
-
-    subgraph TRAIN ["🎯 Masked Training Step"]
-        MASK["Loss computed on\nASSISTANT tokens only\n(USER prompt is masked out)"]:::mask
-    end
-
-    STUDENT(["🧠 BabyProgrammer  10M params\nweights updated · checkpoint saved"]):::output
-
-    PROMPT --> GEN --> PAIR --> MASK --> STUDENT
-
-    classDef input    fill:#4A90D9,stroke:#2c5f8a,color:#fff,rx:8
-    classDef teacher  fill:#C0392B,stroke:#922b21,color:#fff
-    classDef question fill:#555,stroke:#333,color:#ccc
-    classDef answer   fill:#2D6A4F,stroke:#1b4332,color:#fff
-    classDef mask     fill:#D35400,stroke:#a04000,color:#fff
-    classDef output   fill:#6B4C9A,stroke:#432874,color:#fff,rx:8
+    A[sample a grammar cell<br/>op × map × filter × source] --> B[build the IR tree]
+    B --> C[lower to AArch64]
+    B --> D[evaluate in Python<br/>for ~12 input vectors]
+    C --> E[batch 60 programs<br/>into ONE binary]
+    D --> E
+    E --> F{clang builds?}
+    F -->|no| X[BUILD ERROR<br/>abort the run]
+    F -->|yes| G[execute under<br/>progress watchdog]
+    G --> H{every input<br/>matches the oracle?}
+    H -->|no| X
+    H -->|yes| I[render question + code<br/>write to corpus]
+    I --> J[(data/comp_corpus.txt)]
 ```
 
-### Prerequisites
+**Step by step:**
+
+1. **Sample a grammar cell.** The grammar is mostly one form —
+   `reduce(op, map(f, filter(pred, source)))` — where each axis varies
+   independently: 5 reduce ops (`sum`, `product`, `count`, `min`, `max`),
+   6 maps, 6 predicates, 3 sources (integer range, literal array, caller's
+   array). That plus expression trees and conditionals gives **~5,200 distinct
+   program shapes** across 417 grammar cells.
+
+2. **Lower it.** Register allocation is a deterministic function of program
+   structure — a node lowered into `dst` with free index `f` may only touch
+   `w{f}..w9`, and `dst` is always below `f`. Deterministic matters: an earlier
+   version picked registers at random, which made the choice unpredictable from
+   the question and therefore pure noise in the training target.
+
+3. **Choose input vectors.** Edges first — empty array, single element,
+   `lo == hi`, `lo > hi`, negatives, all-equal, sorted — then random. Edge cases
+   are where off-by-one loop bounds actually surface.
+
+4. **Verify by execution.** 60 programs are compiled into a *single* binary,
+   each writing one pass/fail byte as it finishes. This is not a micro-
+   optimisation: on macOS the first run of a freshly built binary pays an
+   OS code-signing check (~0.45s) that is serialised machine-wide, so one
+   process per program is unusably slow. Batching took full-corpus verification
+   from **323s for 600 programs to 34s for 20,000**.
+
+5. **Handle non-termination.** A generated program that hangs would stall the
+   whole batch. Because each program writes a byte as it completes, the partial
+   output names exactly which one stalled; it is charged to itself and the rest
+   is re-run. Detection is based on **progress, not elapsed time** — a fixed
+   deadline cannot distinguish "hung" from "slow to start" when the OS is
+   serialising code-signing checks across parallel workers.
+
+6. **Write only what passed.** Anything that fails aborts the build. A program
+   that disagrees with its own label is a generator bug, not a noisy sample.
+
+### The one thing execution cannot check
+
+If the IR's *meaning* is misunderstood, the assembly and the oracle inherit the
+same mistake, agree perfectly, and verification goes green on a program that
+answers the wrong question. This is not hypothetical — it happened twice:
+
+- A nested expression rendered as `"21 plus 95 times 42"`, which by ordinary
+  precedence means `21 + (95 × 42)`, while the tree meant `(21 + 95) × 42`.
+- An array loop with a filter rendered *identically* to one without, silently
+  dropping the word that changed the code.
+
+Both were correct-by-execution and **wrong as training data**. The guard is
+`arm/golden.py` — 68 hand-written cases whose expected values *and question
+text* were worked out by hand and never derived from the generator. It covers
+all three views, because execution can validate two of them and is structurally
+blind to the third.
 
 ```bash
-# 1. Install and start Ollama (if not already running)
-ollama serve
-
-# 2. Pull the teacher model — do this once
-ollama pull qwen3-coder:30b    # ~19GB, best quality
-# OR if VRAM is tight:
-ollama pull qwen3-coder:8b     # ~5GB, still a strong teacher
-
-# 3. Phase 1 must be done first
-python train_corpus.py
-```
-
-### Step-by-step walkthrough
-
-**Step 1 — Load the checkpoint**
-
-```python
-model, stoi, itos, vocab_size = load_checkpoint(MODEL_PATH)
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
-```
-
-The vocabulary (`stoi`/`itos`) is loaded from the checkpoint.
-This must stay consistent — the encode/decode functions depend on it.
-
-**Step 2 — Walk through curriculum files in sorted order**
-
-```python
-curriculum_files = sorted(CURRICULUM_DIR.glob('*.txt'))
-# 01_variables_and_types.txt
-# 02_control_flow.txt
-# 03_methods_and_arrays.txt
-# 04_oop_basics.txt
-# 05_advanced_topics.txt
-```
-
-Files are processed in numerical order — basics before advanced.
-This mirrors how a real student learns: types before loops, loops before OOP.
-
-**Step 3 — Ask the Oracle (Qwen) for each topic**
-
-```python
-def ask_oracle(topic: str) -> str:
-    system_prompt = (
-        "You are a Senior CS Professor creating a training example.\n"
-        f"Topic: {topic}\n\n"
-        "Respond in exactly this format:\n"
-        "USER: [one clear question]\n"
-        "ASSISTANT: [exact Java code or explanation]"
-    )
-    resp = requests.post('http://localhost:11434/api/generate', json={
-        'model':      'qwen3-coder:30b',
-        'prompt':     system_prompt,
-        'stream':     False,
-        'keep_alive': -1,    # keep Qwen in VRAM between calls — critical for speed
-    })
-    return resp.json().get('response', '').strip()
-```
-
-`keep_alive: -1` keeps Qwen loaded in VRAM between calls.
-Without it, Ollama unloads the model after each request — adding ~30s per lesson.
-
-Example of what Qwen returns:
-```
-USER: How do you declare a final constant MAX_SIZE with value 100 in Java?
-ASSISTANT: final int MAX_SIZE = 100;
-```
-
-**Step 4 — Masked loss (the key technique)**
-
-Standard LM training learns to predict every token — including the USER question.
-We only want the model to learn the **ASSISTANT answer**, not replay the question.
-
-```python
-# Find the token position where ASSISTANT: ends
-assistant_tag = encode("ASSISTANT:")
-for i in range(len(tokens) - len(assistant_tag)):
-    if tokens[i : i + len(assistant_tag)] == assistant_tag:
-        mask_start = i + len(assistant_tag)
-        break
-
-# mask = 0 for USER prompt tokens, 1 for ASSISTANT answer tokens
-mask = torch.zeros(T, device=device)
-mask[mask_start:] = 1.0
-
-# Loss computed only on answer tokens
-loss        = F.cross_entropy(logits.view(B*T, C), y.view(B*T), reduction='none')
-masked_loss = (loss * mask).sum() / (mask.sum() + 1e-8)
-```
-
-Gradient steps only flow through the answer portion.
-The model improves at generating correct answers, not at copying questions.
-
-**Step 5 — Save after every lesson**
-
-```python
-save_checkpoint(MODEL_PATH, model, stoi, itos, vocab_size)
-```
-
-The checkpoint is saved after every single lesson.
-If Ollama times out or you stop the script, no progress is lost.
-
-**Step 6 — Repeat across all 5 curriculum stages**
-
-A full run processes ~250 prompts across the five stages.
-Run the script multiple times to reinforce learning — each pass deepens the patterns.
-
-### Expected console output
-
-```
-============================================================
-  STAGE: 02_control_flow.txt  (35 lessons x 1 epoch)
-============================================================
-
-  Lesson 1/35: How do you write an if statement that prints Adult if age...
-  Oracle: USER: Write an if statement in Java... ASSISTANT: if (age >= 18) {
-  Loss: 1.2341
-
-  Lesson 2/35: How do you write an if-else statement...
-  Oracle: USER: Write an if-else block... ASSISTANT: if (age >= 18) { ...
-  Loss: 0.9823
-```
-
-Loss below 1.0 on a lesson means BabyProgrammer is predicting the teacher's
-answer confidently, character by character.
-
----
-
-## Running the Full Pipeline
-
-```bash
-# Step 1 — Teach Java syntax from the hand-crafted corpus (no Ollama needed)
-python train_corpus.py
-
-# Step 2 — Check where the model stands
-python test_baby.py --temp 0.7
-
-# Step 3 — Start Ollama in a separate terminal
-ollama serve
-
-# Step 4 — Run knowledge distillation through all 5 curriculum stages
-python auto_train_v2.py
-
-# Step 5 — Evaluate improvement
-python test_baby.py --temp 0.7
-
-# Step 6 — Run again for deeper reinforcement (optional, improves score further)
-python auto_train_v2.py
-python test_baby.py --temp 0.7
+$ .venv/bin/python arm/golden.py
+oracle vs hand-written:        44/44 agree
+compiled code vs hand-written: 44/44 agree
+question text vs hand-written:   7/7 agree
+array cases vs hand-written:   34/34 agree
+GOLDEN SET PASSES
 ```
 
 ---
 
-## Evaluation (`test_baby.py`)
+## Training
 
-25 questions across all 5 curriculum stages. Each answer is checked for
-expected keywords. A question passes if at least 2 keywords are found.
-
-```bash
-python test_baby.py              # default: temp=0.8, 150 tokens
-python test_baby.py --temp 0.5   # more deterministic — better for code
-python test_baby.py --tokens 250 # longer answers
+```mermaid
+flowchart LR
+    C[(corpus text)] --> T[tokenize<br/>390-token closed vocab]
+    T --> D[flat token stream]
+    D --> B["random 384-token windows<br/>x = tokens, y = shifted by 1"]
+    B --> M[forward pass]
+    M --> L["cross-entropy over<br/>12,288 next-token predictions"]
+    L --> U[AdamW · lr 3e-4]
+    U --> M
+    M -.every 750 steps.-> E[execution eval]
 ```
 
-Sample output:
-```
-######################################################################
-  FINAL REPORT
-######################################################################
-  Model    : baby_programmer.pth
-  Device   : cuda
-  Vocab    : 95 chars
+**Tokenizer.** Assembly has a genuinely finite vocabulary, so tokens are matched
+by regex, longest-first, with **no BPE and no learned merges**. Two decisions
+carry weight:
 
-  [#####]  5/5  (100%)  Stage 1: Variables & Types
-  [####.]  4/5  ( 80%)  Stage 2: Control Flow
-  [####.]  4/5  ( 80%)  Stage 3: Methods & Arrays
-  [###..]  3/5  ( 60%)  Stage 4: OOP
-  [###..]  3/5  ( 60%)  Stage 5: Advanced Topics
+- **Mnemonics and registers are atomic.** `mov` is one token, `b.ge` is one
+  token. The model cannot emit `mvo` or a malformed register *at all* — invalid
+  output is unrepresentable rather than merely unlikely.
+- **Numbers are split into digits.** Slightly worse compression, but copying a
+  value from question to answer becomes a task over a 10-symbol alphabet that
+  generalises to magnitudes never seen in training.
 
-  OVERALL: 19/25 questions passed  (76%)
-  Grade: B  -- Baby knows the basics, needs more distillation.
-######################################################################
-```
+**Model.** 8 layers × 8 heads × 512 dims, pre-norm residual blocks, fused QKV
+projection, learned absolute position embeddings, block size 384.
 
-| Score   | Grade | Meaning                                    |
-|---------|-------|--------------------------------------------|
-| 80-100% | A     | Solid programmer — knows its Java           |
-| 60-79%  | B     | Knows basics, run more distillation rounds  |
-| 40-59%  | C     | Learning — run more Qwen distillation       |
-| 20-39%  | D     | Needs more training data + Ollama sessions  |
-| 0-19%   | F     | Still babbling — run Phase 1 first          |
+**Where the parameters live** — two thirds is feed-forward; the embeddings are
+nearly free because the vocabulary is 390 rather than 50,000:
+
+| Component | Share |
+|---|---:|
+| feed-forward | 65% |
+| attention (qkv + proj) | 33% |
+| embeddings + head + norms | 2% |
 
 ---
 
-## Data Samples
+## Evaluation
 
-### `data/java_corpus.txt`
+Validation loss is **not** used as a success metric, for a measured reason: in
+one run it went flat at step 1,000 (0.270 → 0.243) while execution accuracy
+climbed from 37% to 95%. Watching loss alone, that run looked converged 3,000
+steps before it was.
 
-```
-USER: How do you declare an int variable named score with value 100?
-ASSISTANT: int score = 100;
-
-USER: How do you write a for loop from 1 to 10?
-ASSISTANT: for (int i = 1; i <= 10; i++) { System.out.println(i); }
-
-USER: How do you define a recursive method for factorial?
-ASSISTANT: public static int factorial(int n) { if (n <= 1) return 1; return n * factorial(n - 1); }
-
-USER: What is encapsulation in Java?
-ASSISTANT: Encapsulation hides internal data using private fields and provides
-public getter and setter methods. Example: private int balance; public int getBalance() { return balance; }
-
-USER: How do you use a HashMap in Java?
-ASSISTANT: HashMap<String, Integer> map = new HashMap<>(); map.put("Alice", 95); int grade = map.get("Alice");
+```mermaid
+flowchart LR
+    Q[held-out question] --> G[greedy decode]
+    G --> P{parses?<br/>ends with ret}
+    P -->|no| F[fail]
+    P -->|yes| BL{clang links it?}
+    BL -->|no| F
+    BL -->|yes| R[run on ~12 inputs]
+    R --> CK{ALL match<br/>the oracle?}
+    CK -->|no| F
+    CK -->|yes| OK[correct]
 ```
 
-### `data/curriculum_configs/01_variables_and_types.txt` (sample)
+Linking matters, not just assembling: `b loop` with no `loop:` label assembles
+fine and only fails at link time — and a loop with a missing label is exactly
+the mistake this model makes.
 
-```
-How do you declare an int variable named score with value 100 in Java?
-How do you use the modulo operator in Java to check if a number is even?
-How do you cast a double to an int in Java?
-How do you use StringBuilder to build a String efficiently in Java?
-What is the difference between == and equals when comparing Strings in Java?
-```
+**Why per-program and not per-answer.** An earlier version ran each program
+once. It scored a hardcoded `ldr w0, [sp, #4]` as a working "find the largest
+element", because index 1 happened to hold the maximum. Single-input scoring
+overstated accuracy by **8 points** and overstated it *most* on the shapes that
+were most broken — a metric that flatters failure is worse than no metric.
 
-### `data/curriculum_configs/05_advanced_topics.txt` (sample)
-
-```
-How do you write bubble sort in Java?
-How do you implement a binary search on a sorted array?
-How do you implement a Stack class using an ArrayList?
-What is O(n squared) time complexity? Give a Java example.
-How do you use Stream filter to get only even numbers from a list?
-How do you detect a cycle in a linked list in Java?
-```
+**Why held out by structure, not by constants.** Varying the numbers in a
+question while the shape stays in training measures memorisation of values. The
+splits here remove whole *grammar cells* — every `product × square × even`
+program — while `product`, `square` and `even` each stay in training elsewhere.
+Only the **combination** is new.
 
 ---
 
-## Tips and Troubleshooting
+## Sample runs
 
-**Ollama is slow between lessons**
-`keep_alive: -1` is already set in `auto_train_v2.py`. This keeps Qwen in VRAM.
-Without it, the model evicts and reloads every call, adding ~30s per lesson.
+All output below is real, generated by `checkpoints/goal_25M.pth` and executed.
 
-**Not enough VRAM for qwen3-coder:30b alongside BabyProgrammer**
-Change `OLLAMA_MODEL = 'qwen3-coder:8b'` at the top of `auto_train_v2.py`.
-The 8b model is a strong teacher for all Java basics and OOP concepts.
+### Composed loop with a filter and a map
 
-**Loss not going down in train_corpus.py**
-Lower the learning rate: change `LEARNING_RATE = 5e-4` to `1e-4`.
-Or increase `MAX_ITERS` to 30000 for more passes over the small corpus.
+```
+USER: Calculate the largest of the squares of the even integers from 22 to 31
+      and place the result in w0.
 
-**Test score is stuck after distillation**
-Run `python auto_train_v2.py` a second and third time.
-Each pass revisits all 250 lessons, deepening the weight patterns.
+    mov w1, #22
+    mov w2, #31
+    mov w0, #0
+    mov w4, #0          ← "have a value yet" flag
+loop1:
+    cmp w1, w2
+    b.gt done2
+    mov w3, w1
+    and w5, w3, #1      ← the "even" filter
+    cmp w5, #0
+    b.ne skip3
+    mul w3, w3, w3      ← the "squares" map
+    cmp w4, #0
+    b.ne seed4
+    mov w0, w3          ← first kept value seeds the max
+    mov w4, #1
+    b keep5
+seed4:
+    cmp w3, w0
+    b.le keep5
+    mov w0, w3
+keep5:
+skip3:
+    add w1, w1, #1
+    b loop1
+done2:
+    ret
 
-**Model generates gibberish**
-Lower temperature: `python test_baby.py --temp 0.3`.
-High temperature = more randomness. For code, 0.3–0.6 works best.
+→ CORRECT on all 12 test inputs
+```
 
-**Never change the architecture constants in `model.py` after saving a checkpoint.**
-If `N_EMBD`, `N_HEAD`, `N_LAYER`, or `BLOCK_SIZE` change, the saved weights
-will not load and you will need to retrain from scratch.
+Every qualifier in the sentence changed the code: *largest* produced the
+seed-and-compare accumulator, *squares* the `mul`, *even* the `and`/`cmp` filter.
+
+### Arguments, not constants
+
+```
+USER: Assembly please: the largest of the odd integers from w0 to w1,
+      each increased by 8, result in w0. The inputs are in w0, w1.
+
+    mov w10, w0         ← park arguments clear of temporaries
+    mov w11, w1
+    ...
+    and w5, w3, #1
+    cmp w5, #1          ← odd
+    b.ne skip3
+    mov w5, #8
+    add w3, w3, w5      ← each increased by 8
+    ...
+→ CORRECT on all 12 test inputs
+```
+
+### Factual questions
+
+```
+USER: What happens when I write sub?
+ASSISTANT:
+sub subtracts the second value from the first. For example,
+sub w0, w1, w2 means w0 holds w1 - w2.
+
+USER: Explain how a comparison works.
+ASSISTANT:
+cmp sets flags describing the subtraction, then a conditional branch
+or cset reads those flags. cmp itself changes no register.
+```
+
+A real failure, for honesty — asked to explain `movk`, the model produced the
+right sentence but wrote `#9999` where the reference says `#999`. The digit-copy
+skill that is reliable inside assembly is weaker inside prose.
 
 ---
 
-## File Reference
+## Repository layout
 
-| File | Purpose | Run when |
-|---|---|---|
-| `model.py` | Architecture + save/load utilities | Imported by all scripts |
-| `train_corpus.py` | Phase 1 — Java syntax imprinting | First, always |
-| `auto_train_v2.py` | Phase 2 — Qwen distillation | After Phase 1 |
-| `test_baby.py` | Evaluate the model | Anytime |
-| `data/java_corpus.txt` | Hand-crafted Q&A training pairs | Used by train_corpus.py |
-| `data/curriculum_configs/` | Lesson prompts for distillation | Used by auto_train_v2.py |
+| Path | Role |
+|---|---|
+| `arm/ir.py` | IR node types, the oracle, the question renderer |
+| `arm/lower.py` | IR → AArch64, deterministic register allocation |
+| `arm/grammar.py` | samples IR structures; defines grammar cells |
+| `arm/verify_ir.py` | batch compile + execute + compare against the oracle |
+| `arm/watchdog.py` | progress-based hang detection |
+| `arm/golden.py` | hand-written ground truth for all three views |
+| `arm/split.py` | held-out cells, input sizes, depths |
+| `arm/facts.py` | factual ISA question/answer pairs |
+| `arm/tokenizer.py` | closed-vocabulary reversible tokenizer |
+| `arm/build_corpus.py` | generate + verify + write a corpus |
+| `arm/train_comp.py` | training loop with five evaluation metrics |
+| `arm/eval_comp.py` | generate → build → execute → compare |
+| `arm/ask.py` | ask the model questions by hand |
+| `model.py` | the transformer |
+
+---
+
+## Known limits
+
+**It composes, but it does not recurse.** Asked for an expression nested one
+level deeper than anything in training, it emits well-formed, compiling code
+that is systematically *too short* — a depth-3 program for a depth-4 question.
+Move the training ceiling from 3 to 4 and the failure moves to 5. It learned a
+maximum depth, not a recursion.
+
+This survived every lever tried:
+
+| Attempted fix | Depth score |
+|---|---:|
+| 1.9M parameters | 0.5% |
+| 10.9M parameters | 3.0% |
+| 25.5M parameters | 2.5% |
+| train deeper (≤4), test at 5 | 0.5% |
+| plan-then-code decomposition | 0.7% |
+
+The decomposition experiment localised it: given a place to write the steps out
+first, on deep problems the model produced a correct decomposition **0.0%** of
+the time and the right *number* of steps only 24.7%. It cannot break down a deep
+problem, because breaking it down is itself the recursive act.
+
+**What that means practically.** The model handles any single-level program
+composed from operations it knows, over inputs of any size. It cannot build
+structure whose shape it has not been shown. For a bounded domain that is often
+enough; for open-ended programming it is not.
+
+**Other limits worth knowing:**
+- Learned absolute position embeddings cannot extrapolate past `block_size`.
+  Longer programs need rotary or ALiBi, not just a bigger number.
+- The factual Q&A is *trusted, not verified* — you cannot execute an English
+  sentence. It is deliberately small, hand-written, and scoped to the
+  instruction subset the generator actually emits.
+- No division. `udiv`/`sdiv` are outside the instruction subset.
+
+---
+
+## What scales
+
+Measured, not guessed:
+
+| Lever | Effect |
+|---|---|
+| **more parameters** | composition 30% → 63.5% → 82% across 1.9M → 10.9M → 25.5M, still climbing |
+| **KV cache** | generation 2.56s → 0.40s, byte-identical output |
+| **fused attention** | step time 924ms → 360ms, verified identical math |
+| **decomposition** | +9 points at 10.9M, **nothing at 25.5M** — a capacity aid, not a free win, so it was dropped |
+| **deeper training data** | no effect on depth extrapolation |
+
+Untried and likely worthwhile: cosine LR decay with warmup (the observed
+85 → 66 → 93 oscillation at flat loss is what a too-high late LR looks like),
+masking loss to the answer only (about a third of each step is currently spent
+predicting prompts), bf16 autocast, and `torch.compile`.

@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+
+# Trained weights. goal_25M.pth is 113MB, past GitHub's 100MB hard limit, so
+# checkpoints stay out of git entirely -- use releases or LFS if they need to
+# be shared.
+*.pth
+checkpoints/
+
+# Regenerable from a seed:
+#   .venv/bin/python arm/build_corpus.py --n 20000 --out data/comp_corpus.txt
+data/comp_corpus.txt
+data/comp_shapes.json
+data/*.jsonl
