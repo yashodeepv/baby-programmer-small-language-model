@@ -169,7 +169,7 @@ semantics, so a codegen bug shows up as an execution mismatch. Every generated
 program is compiled and run against the oracle on ~12 inputs before it enters
 the corpus; anything that disagrees stops the build.
 
-📐 **[Full architecture, diagrams and design notes →](https://claude.ai/code/artifact/d315f876-103f-45d5-aa5d-bc29d04a46fe)**
+📐 **[Full architecture, diagrams and design notes →]([https://claude.ai/code/artifact/d315f876-103f-45d5-aa5d-bc29d04a46fe](https://yashodeepv.github.io/baby-programmer-small-language-model/))**
 
 ---
 
