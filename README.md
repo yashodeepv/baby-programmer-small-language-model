@@ -96,6 +96,42 @@ stub instead of the model.
 **The model knows one wording per operation.** Reword it and you get confident,
 valid assembly that computes something else — no error, no warning.
 
+A question is built from two parts. The **wrapper** is flexible; the **operation
+phrase** is not.
+
+### Wrappers — any of these 16
+
+```
+Write a function that returns X in w0.        How do I compute X? The result goes in w0.
+Compute X, leaving the result in w0.          Write AArch64 that works out X, answer in w0.
+Return X in w0.                               The result in w0 should be X.
+Give me assembly that computes X. Put …       In w0, put X.
+I need X. Leave it in w0.                     Emit code for X. w0 holds the result.
+Calculate X and place the result in w0.       What assembly computes X? Return it in w0.
+Produce X in register w0.                     Store X in w0.
+Work out X; the answer belongs in w0.         Assembly please: X, result in w0.
+```
+
+### Operation phrases — a fixed vocabulary
+
+`X` above is assembled from these slots, and **only** these:
+
+| Slot | Exact wording |
+|---|---|
+| reduce | `the sum of` · `the product of` · `how many of` · `the smallest of` · `the largest of` |
+| source | `the integers from A to B` · `the elements of the array` · `the elements of [1, 2, 3]` |
+| filter | `even ` · `odd ` (before the noun) · `that are greater than K` · `that are less than K` · `that are divisible by K` (after) |
+| map | `the squares of ` · `double ` (before) · `, each increased by K` · `, each multiplied by K` (after) |
+
+Composed, that reads: `the sum of the squares of the even integers from 2 to 20`.
+
+Other forms it knows: `element at index N of [...]`, `the length of the array`,
+`the negation of N`, `the absolute value of N`, `A plus B`, `A times B`,
+`A bitwise AND B`, `A shifted left by N`, `A if A is at least B, otherwise B`,
+`1 if A is greater than B, otherwise 0`, `zero after counting down from N`.
+
+### Consequence
+
 | Works | Fails silently |
 |---|---|
 | `the sum of the elements of the array` | "Sum the array" |
@@ -103,11 +139,12 @@ valid assembly that computes something else — no error, no warning.
 | `the sum of the even integers from 2 to 20` | "Add up the evens" |
 | `how many of the elements of the array that are greater than 10` | "Count elements over 10" |
 
-The sentence *around* the operation is flexible — "Compute X…", "I need X…",
-"What assembly computes X?" all work. Only the phrase naming the operation is
-fixed.
+This is a **corpus limitation, not a model one** — `ir.show()` has exactly one
+rendering per node type, so no paraphrase was ever generated and none was ever
+trained on. Giving `show()` several wordings per node is the single largest
+remaining usability fix.
 
-List what it knows:
+List real examples:
 
 ```bash
 .venv/bin/python -c "
