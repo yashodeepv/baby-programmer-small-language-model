@@ -206,7 +206,7 @@ semantics, so a codegen bug shows up as an execution mismatch. Every generated
 program is compiled and run against the oracle on ~12 inputs before it enters
 the corpus; anything that disagrees stops the build.
 
-📐 **[Full architecture, diagrams and design notes →](https://yashodeepv.github.io/baby-programmer-small-language-model/))**
+📐 **[Full architecture, diagrams and design notes →](https://yashodeepv.github.io/baby-programmer-small-language-model/)**
 
 ---
 
