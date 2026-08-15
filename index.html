@@ -611,7 +611,110 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
 </section>
 
 <section>
-  <h2><span class="num">10</span><span class="txt">Evaluation</span></h2>
+  <h2><span class="num">10</span><span class="txt">Inference</span></h2>
+  <div class="prose">
+    <p>The model never sees English. It sees integers. Every stage below is traced from a real run of <code>arm/ask.py</code> with the question <i>"Compute the sum of the even integers from 2 to 20, leaving the result in w0."</i></p>
+  </div>
+
+  <figure>
+    <div class="inner">
+      <svg viewBox="0 0 860 470" role="img" aria-label="User text is wrapped in a role prompt, tokenized to 24 integers, embedded, run through the model to produce logits, decoded greedily one token at a time with a KV cache, then converted back to text, parsed, assembled and executed.">
+        <!-- stage 1 -->
+        <rect class="bx" x="14" y="14" width="832" height="40" rx="4"/>
+        <text class="t-s" x="26" y="30">1 · USER TYPES</text>
+        <text class="t" x="150" y="41">Compute the sum of the even integers from 2 to 20, leaving the result in w0.</text>
+        <path class="ln-a" d="M430,54 L430,70" marker-end="url(#a2)"/>
+
+        <!-- stage 2 -->
+        <rect class="bx" x="14" y="74" width="832" height="42" rx="4"/>
+        <text class="t-s" x="26" y="90">2 · WRAPPED</text>
+        <text class="t-s" x="26" y="106">ask.py</text>
+        <text class="t" x="150" y="93">USER: Compute the sum … in w0.</text>
+        <text class="t-a" x="150" y="109">ASSISTANT:</text>
+        <text class="t-s" x="700" y="101">the model continues from here</text>
+        <path class="ln-a" d="M430,116 L430,132" marker-end="url(#a2)"/>
+
+        <!-- stage 3 -->
+        <rect class="bx" x="14" y="136" width="832" height="46" rx="4"/>
+        <text class="t-s" x="26" y="152">3 · TOKENIZED</text>
+        <text class="t-s" x="26" y="168">regex, no BPE</text>
+        <text class="t" x="150" y="158">'USER:' · ' Compute' · ' the' · ' sum' · ' of' · ' the' · ' even' · ' integers' · ' from' · ' ' · '2' · ' to' …</text>
+        <text class="t-s" x="150" y="174">24 tokens — note '2' and '0' are separate digit tokens, and ' the' carries its leading space</text>
+        <path class="ln-a" d="M430,182 L430,198" marker-end="url(#a2)"/>
+
+        <!-- stage 4 -->
+        <rect class="bx-a" x="14" y="202" width="832" height="44" rx="4"/>
+        <text class="t-s" x="26" y="218">4 · TOKEN IDS</text>
+        <text class="t-s" x="26" y="234">what the model sees</text>
+        <text class="t-b" x="150" y="224">[310, 8, 241, 236, 186, 241, 104, 136, 115, 3, 292, 245, …]</text>
+        <text class="t-s" x="150" y="239">tensor (1, 24) — from here on there is no text, only numbers</text>
+        <path class="ln-a" d="M430,246 L430,262" marker-end="url(#a2)"/>
+
+        <!-- stage 5 : model -->
+        <rect class="bx-d" x="14" y="266" width="832" height="96" rx="4"/>
+        <text class="t-s" x="26" y="284">5 · MODEL</text>
+
+        <rect class="bx" x="120" y="292" width="118" height="34" rx="4"/>
+        <text class="t" x="179" y="313" text-anchor="middle">embed + position</text>
+        <path class="ln" d="M238,309 L262,309" marker-end="url(#a1)"/>
+        <rect class="bx" x="266" y="292" width="118" height="34" rx="4"/>
+        <text class="t" x="325" y="313" text-anchor="middle">8 blocks</text>
+        <path class="ln" d="M384,309 L408,309" marker-end="url(#a1)"/>
+        <rect class="bx" x="412" y="292" width="140" height="34" rx="4"/>
+        <text class="t" x="482" y="313" text-anchor="middle">logits (1, 24, 390)</text>
+        <path class="ln" d="M552,309 L576,309" marker-end="url(#a1)"/>
+        <rect class="bx-a" x="580" y="292" width="150" height="34" rx="4"/>
+        <text class="t-a" x="655" y="313" text-anchor="middle">argmax at last position</text>
+
+        <text class="t-s" x="120" y="345">one score per vocabulary entry, per position — only the LAST position is used</text>
+        <text class="t-s" x="120" y="358">first token out: id 2 = '\n␣␣␣␣'  →  appended, fed back, KV cache reused</text>
+        <path class="ln-a" d="M730,309 C776,309 776,344 700,344 L180,344 L180,330" marker-end="url(#a2)"/>
+
+        <path class="ln-a" d="M430,362 L430,378" marker-end="url(#a2)"/>
+
+        <!-- stage 6 -->
+        <rect class="bx" x="14" y="382" width="832" height="40" rx="4"/>
+        <text class="t-s" x="26" y="398">6 · DECODED</text>
+        <text class="t-s" x="26" y="414">78 new ids</text>
+        <text class="t" x="150" y="407">mov w1, #2 · mov w2, #20 · mov w0, #0 · loop1: · cmp w1, w2 · … · ret</text>
+        <path class="ln-a" d="M430,422 L430,438" marker-end="url(#a2)"/>
+
+        <!-- stage 7 -->
+        <rect class="bx" x="14" y="442" width="404" height="24" rx="4"/>
+        <text class="t-s" x="26" y="458">7 · PARSED — cut at 'USER:', stop at 'ret'</text>
+        <rect class="bx-a" x="442" y="442" width="404" height="24" rx="4"/>
+        <text class="t-a" x="454" y="458">8 · --run: clang → execute → w0 = 110</text>
+      </svg>
+    </div>
+    <figcaption><b>FIG. 06</b> Inference, traced from a real run. Text becomes integers at stage 4 and stays that way until stage 6.</figcaption>
+  </figure>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Stage</th><th>Code</th><th>Shape / value</th></tr></thead>
+    <tbody>
+      <tr><td>wrap in role prompt</td><td class="m">ask.py</td><td class="m">"USER: … \nASSISTANT:"</td></tr>
+      <tr><td>tokenize</td><td class="m">tokenizer.encode</td><td class="m">24 tokens</td></tr>
+      <tr><td>to tensor</td><td class="m">torch.tensor</td><td class="m">(1, 24) int64</td></tr>
+      <tr><td>forward</td><td class="m">model.forward</td><td class="m">(1, 24, 390) logits</td></tr>
+      <tr><td>pick next token</td><td class="m">argmax(-1)</td><td class="m">1 id, greedy</td></tr>
+      <tr><td>append and repeat</td><td class="m">model.generate</td><td class="m">78 ids, KV cache reused</td></tr>
+      <tr><td>back to text</td><td class="m">tokenizer.decode</td><td class="m">assembly string</td></tr>
+      <tr><td>parse</td><td class="m">parse_answer</td><td class="m">list of instructions</td></tr>
+      <tr><td>run (optional)</td><td class="m">run_code</td><td class="m">w0 = 110</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p class="h">Two details that matter</p>
+    <p><b>Decoding is greedy</b> — <code>argmax</code>, not sampling. The same question always produces the same answer, so a score reflects what the model learned rather than a lucky draw.</p>
+    <p><b>Generation stops at <code>ret</code></b>, which is a single token. Without that the model rolls straight on into an invented next <code>USER:</code> turn, so the continuation is also cut there before being parsed.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">11</span><span class="txt">Evaluation</span></h2>
 
   <figure>
     <div class="inner">
@@ -648,7 +751,7 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
         <text class="t-s" x="520" y="150" text-anchor="middle">linking, not merely assembling — `b loop` with no `loop:` label assembles fine and fails only at link</text>
       </svg>
     </div>
-    <figcaption><b>FIG. 06</b> The eval funnel on held-out combinations. Everything parses and links; correctness is where the signal is.</figcaption>
+    <figcaption><b>FIG. 07</b> The eval funnel on held-out combinations. Everything parses and links; correctness is where the signal is.</figcaption>
   </figure>
 
   <div class="scroll">
@@ -671,7 +774,7 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
 </section>
 
 <section>
-  <h2><span class="num">11</span><span class="txt">What scales</span></h2>
+  <h2><span class="num">12</span><span class="txt">What scales</span></h2>
   <div class="scroll">
   <table>
     <thead><tr><th>Lever</th><th>Effect</th></tr></thead>
