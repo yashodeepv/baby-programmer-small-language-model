@@ -99,18 +99,29 @@ valid assembly that computes something else — no error, no warning.
 A question is built from two parts. The **wrapper** is flexible; the **operation
 phrase** is not.
 
-### Wrappers — any of these 16
+### The 16 wrappers
 
-```
-Write a function that returns X in w0.        How do I compute X? The result goes in w0.
-Compute X, leaving the result in w0.          Write AArch64 that works out X, answer in w0.
-Return X in w0.                               The result in w0 should be X.
-Give me assembly that computes X. Put …       In w0, put X.
-I need X. Leave it in w0.                     Emit code for X. w0 holds the result.
-Calculate X and place the result in w0.       What assembly computes X? Return it in w0.
-Produce X in register w0.                     Store X in w0.
-Work out X; the answer belongs in w0.         Assembly please: X, result in w0.
-```
+Defined in `arm/ir.py` as `_PHRASINGS`. `{body}` is where the operation phrase
+goes. Any of these work; nothing else does.
+
+| # | Wrapper |
+|---|---|
+| 1 | `Write a function that returns {body} in w0.` |
+| 2 | `Compute {body}, leaving the result in w0.` |
+| 3 | `Return {body} in w0.` |
+| 4 | `Give me assembly that computes {body}. Put the answer in w0.` |
+| 5 | `I need {body}. Leave it in w0.` |
+| 6 | `Calculate {body} and place the result in w0.` |
+| 7 | `Produce {body} in register w0.` |
+| 8 | `How do I compute {body}? The result goes in w0.` |
+| 9 | `Write AArch64 that works out {body}, answer in w0.` |
+| 10 | `The result in w0 should be {body}.` |
+| 11 | `In w0, put {body}.` |
+| 12 | `Emit code for {body}. w0 holds the result.` |
+| 13 | `What assembly computes {body}? Return it in w0.` |
+| 14 | `Store {body} in w0.` |
+| 15 | `Work out {body}; the answer belongs in w0.` |
+| 16 | `Assembly please: {body}, result in w0.` |
 
 ### Operation phrases — a fixed vocabulary
 

@@ -456,6 +456,34 @@ GOLDEN SET PASSES</span></code></pre>
     <figcaption><b>FIG. 04</b> Flexible packaging, rigid core. Only the highlighted phrase names the computation.</figcaption>
   </figure>
 
+  <h3>The 16 wrappers</h3>
+  <div class="prose">
+    <p>Defined in <code>arm/ir.py</code> as <code>_PHRASINGS</code>. <b>X</b> marks where the operation phrase goes.</p>
+  </div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>#</th><th>Wrapper</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1</td><td class="m">Write a function that returns <b>X</b> in w0.</td></tr>
+      <tr><td class="n">2</td><td class="m">Compute <b>X</b>, leaving the result in w0.</td></tr>
+      <tr><td class="n">3</td><td class="m">Return <b>X</b> in w0.</td></tr>
+      <tr><td class="n">4</td><td class="m">Give me assembly that computes <b>X</b>. Put the answer in w0.</td></tr>
+      <tr><td class="n">5</td><td class="m">I need <b>X</b>. Leave it in w0.</td></tr>
+      <tr><td class="n">6</td><td class="m">Calculate <b>X</b> and place the result in w0.</td></tr>
+      <tr><td class="n">7</td><td class="m">Produce <b>X</b> in register w0.</td></tr>
+      <tr><td class="n">8</td><td class="m">How do I compute <b>X</b>? The result goes in w0.</td></tr>
+      <tr><td class="n">9</td><td class="m">Write AArch64 that works out <b>X</b>, answer in w0.</td></tr>
+      <tr><td class="n">10</td><td class="m">The result in w0 should be <b>X</b>.</td></tr>
+      <tr><td class="n">11</td><td class="m">In w0, put <b>X</b>.</td></tr>
+      <tr><td class="n">12</td><td class="m">Emit code for <b>X</b>. w0 holds the result.</td></tr>
+      <tr><td class="n">13</td><td class="m">What assembly computes <b>X</b>? Return it in w0.</td></tr>
+      <tr><td class="n">14</td><td class="m">Store <b>X</b> in w0.</td></tr>
+      <tr><td class="n">15</td><td class="m">Work out <b>X</b>; the answer belongs in w0.</td></tr>
+      <tr><td class="n">16</td><td class="m">Assembly please: <b>X</b>, result in w0.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
   <div class="scroll">
   <table>
     <thead><tr><th>Slot</th><th>Exact wording — the complete set</th></tr></thead>
