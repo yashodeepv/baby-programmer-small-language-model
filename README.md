@@ -30,6 +30,16 @@ done2:
    ran -> w0 = 110   PASS
 ```
 
+> [!IMPORTANT]
+> **This is a very small model** — 25.8M parameters, trained for about 100
+> minutes on a single generated corpus. It is not a general assistant and does
+> not understand free English. It answers questions built from a **fixed
+> vocabulary** (below), and anything outside it produces confident, valid
+> assembly that computes the wrong thing, with no error.
+>
+> An [interactive query builder](https://yashodeepv.github.io/baby-programmer-small-language-model/#builder)
+> constructs valid questions for you.
+
 ---
 
 ## Setup

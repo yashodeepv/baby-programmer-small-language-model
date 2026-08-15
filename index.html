@@ -117,6 +117,32 @@
   .pull .src{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:10px;
              letter-spacing:.06em}
 
+  .caveat{margin-top:26px;padding:16px 20px;border:1px solid var(--red);
+          border-left:3px solid var(--red);background:#a3392a0a;border-radius:0 4px 4px 0}
+  .caveat .h{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+             color:var(--red);margin:0 0 8px;font-weight:600}
+  .caveat p{margin:10px 0 0;font-size:14.5px}
+
+  /* query builder */
+  .qb{margin-top:20px;border:1px solid var(--rule-2);background:var(--panel);border-radius:6px}
+  .qb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;padding:18px}
+  .qb label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+            text-transform:uppercase;color:var(--ink-3);margin-bottom:5px}
+  .qb select,.qb input{width:100%;padding:7px 9px;font-family:var(--mono);font-size:12.5px;
+     color:var(--ink);background:var(--paper);border:1px solid var(--rule-2);border-radius:4px}
+  .qb select:focus,.qb input:focus{outline:2px solid var(--teal);outline-offset:1px}
+  .qb-out{border-top:1px solid var(--rule-2);padding:16px 18px;background:var(--paper);
+          border-radius:0 0 5px 5px}
+  .qb-out .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+               color:var(--ink-3);margin:0 0 8px}
+  #qb-q{font-family:var(--mono);font-size:13px;line-height:1.55;color:var(--ink);
+        word-break:break-word;margin:0}
+  #qb-cmd{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);background:var(--panel);
+          border:1px solid var(--rule);border-radius:4px;padding:9px 11px;margin-top:12px;
+          white-space:pre-wrap;word-break:break-all}
+  .qb-btn{margin-top:12px;padding:7px 13px;font-family:var(--mono);font-size:11.5px;
+          color:var(--paper);background:var(--teal);border:0;border-radius:4px;cursor:pointer}
+  .qb-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
   a{color:var(--teal)}
   footer{margin-top:70px;padding-top:16px;border-top:2px solid var(--ink);
          font-family:var(--mono);font-size:12px;color:var(--ink-3)}
@@ -140,6 +166,13 @@
     <div><dt>Unverified</dt><dd>0</dd></div>
   </div>
 </header>
+
+<div class="caveat">
+  <p class="h">Read this first — the input language is narrow</p>
+  <p>This is a <b>very small model</b> — 25.8M parameters, trained for about 100 minutes on a single corpus. It is not a general assistant and does not understand free English. It answers questions built from a <b>fixed vocabulary</b>, and anything outside it produces confident, valid assembly that computes the wrong thing, with no error.</p>
+  <p>Use the <a href="#builder">query builder</a> below to construct questions it can actually answer.</p>
+</div>
+
 
 <section>
   <h2><span class="num">01</span><span class="txt">System</span></h2>
@@ -455,6 +488,78 @@ GOLDEN SET PASSES</span></code></pre>
     </div>
     <figcaption><b>FIG. 04</b> Flexible packaging, rigid core. Only the highlighted phrase names the computation.</figcaption>
   </figure>
+
+  <h3 id="builder">Query builder</h3>
+  <div class="prose">
+    <p>Every question the model can answer is one wrapper plus one operation phrase. Pick the parts; the exact wording is assembled for you.</p>
+  </div>
+
+  <div class="qb">
+    <div class="qb-grid">
+      <div>
+        <label for="qb-wrap">Wrapper</label>
+        <select id="qb-wrap"></select>
+      </div>
+      <div>
+        <label for="qb-op">Operation</label>
+        <select id="qb-op">
+          <option value="sum">the sum of</option>
+          <option value="product">the product of</option>
+          <option value="count">how many of</option>
+          <option value="min">the smallest of</option>
+          <option value="max">the largest of</option>
+        </select>
+      </div>
+      <div>
+        <label for="qb-map">Map (optional)</label>
+        <select id="qb-map">
+          <option value="">— none —</option>
+          <option value="square">the squares of</option>
+          <option value="double">double</option>
+          <option value="addk">each increased by K</option>
+          <option value="mulk">each multiplied by K</option>
+        </select>
+      </div>
+      <div>
+        <label for="qb-filter">Filter (optional)</label>
+        <select id="qb-filter">
+          <option value="">— none —</option>
+          <option value="even">even</option>
+          <option value="odd">odd</option>
+          <option value="gt">greater than K</option>
+          <option value="lt">less than K</option>
+          <option value="divk">divisible by K</option>
+        </select>
+      </div>
+      <div>
+        <label for="qb-src">Source</label>
+        <select id="qb-src">
+          <option value="range">the integers from A to B</option>
+          <option value="inarr">the elements of the array</option>
+          <option value="lit">the elements of [a literal list]</option>
+        </select>
+      </div>
+      <div>
+        <label for="qb-a">A / K</label>
+        <input id="qb-a" type="number" value="2">
+      </div>
+      <div>
+        <label for="qb-b">B</label>
+        <input id="qb-b" type="number" value="20">
+      </div>
+      <div>
+        <label for="qb-lit">Literal list</label>
+        <input id="qb-lit" type="text" value="4, 9, 2, 7">
+      </div>
+    </div>
+    <div class="qb-out">
+      <p class="lbl">Question</p>
+      <p id="qb-q"></p>
+      <p class="lbl" style="margin-top:14px">Command</p>
+      <div id="qb-cmd"></div>
+      <button class="qb-btn" id="qb-copy" type="button">Copy command</button>
+    </div>
+  </div>
 
   <h3>The 16 wrappers</h3>
   <div class="prose">
@@ -799,5 +904,86 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
 
 </div>
 
+<script>
+(function () {
+  var WRAP = [
+    'Write a function that returns {body} in w0.',
+    'Compute {body}, leaving the result in w0.',
+    'Return {body} in w0.',
+    'Give me assembly that computes {body}. Put the answer in w0.',
+    'I need {body}. Leave it in w0.',
+    'Calculate {body} and place the result in w0.',
+    'Produce {body} in register w0.',
+    'How do I compute {body}? The result goes in w0.',
+    'Write AArch64 that works out {body}, answer in w0.',
+    'The result in w0 should be {body}.',
+    'In w0, put {body}.',
+    'Emit code for {body}. w0 holds the result.',
+    'What assembly computes {body}? Return it in w0.',
+    'Store {body} in w0.',
+    'Work out {body}; the answer belongs in w0.',
+    'Assembly please: {body}, result in w0.'
+  ];
+  var NOUN = {sum:'the sum of', product:'the product of', count:'how many of',
+              min:'the smallest of', max:'the largest of'};
+  var $ = function (id) { return document.getElementById(id); };
+
+  WRAP.forEach(function (w, i) {
+    var o = document.createElement('option');
+    o.value = i; o.textContent = (i + 1) + '. ' + w.replace('{body}', 'X');
+    $('qb-wrap').appendChild(o);
+  });
+  $('qb-wrap').value = 1;
+
+  function build() {
+    var op = $('qb-op').value, mp = $('qb-map').value, fl = $('qb-filter').value,
+        src = $('qb-src').value, a = $('qb-a').value, b = $('qb-b').value,
+        lit = $('qb-lit').value;
+
+    // `count` ignores the mapped value, so the corpus never pairs them
+    if (op === 'count') { $('qb-map').value = ''; mp = ''; $('qb-map').disabled = true; }
+    else { $('qb-map').disabled = false; }
+
+    var pre = '', post = '';
+    if (mp === 'square') pre = 'the squares of ';
+    else if (mp === 'double') pre = 'double ';
+    else if (mp === 'addk') post += ', each increased by ' + a;
+    else if (mp === 'mulk') post += ', each multiplied by ' + a;
+
+    var filt = '';
+    if (fl === 'even') filt = 'even ';
+    else if (fl === 'odd') filt = 'odd ';
+    else if (fl === 'gt') post = ' that are greater than ' + a + post;
+    else if (fl === 'lt') post = ' that are less than ' + a + post;
+    else if (fl === 'divk') post = ' that are divisible by ' + a + post;
+
+    var tail, abi = '', flag = '';
+    if (src === 'range') {
+      tail = 'the ' + filt + 'integers from ' + a + ' to ' + b;
+    } else if (src === 'inarr') {
+      tail = 'the ' + filt + 'elements of the array';
+      abi = ' The array pointer is in x0 and its length in w1.';
+      flag = ' --array ' + lit.replace(/\s+/g, '');
+    } else {
+      tail = 'the ' + filt + 'elements of [' + lit + ']';
+    }
+
+    var body = NOUN[op] + ' ' + pre + tail + post;
+    var q = WRAP[$('qb-wrap').value].replace('{body}', body) + abi;
+    $('qb-q').textContent = q;
+    $('qb-cmd').textContent = '.venv/bin/python arm/ask.py --run' + flag + ' \\\n  "' + q + '"';
+  }
+
+  ['qb-wrap','qb-op','qb-map','qb-filter','qb-src','qb-a','qb-b','qb-lit'].forEach(function (id) {
+    $(id).addEventListener('input', build);
+  });
+  $('qb-copy').addEventListener('click', function () {
+    navigator.clipboard.writeText($('qb-cmd').textContent).then(function () {
+      var b = $('qb-copy'); b.textContent = 'Copied'; setTimeout(function(){ b.textContent = 'Copy command'; }, 1400);
+    });
+  });
+  build();
+})();
+</script>
 </body>
 </html>
