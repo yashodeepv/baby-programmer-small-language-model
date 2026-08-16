@@ -135,7 +135,8 @@ class Program:
     body:   object
     n_args: int = 0
     shape:  str = ""            # grammar cell id, used for held-out splits
-    phrase: int = 0             # which surface phrasing to render
+    phrase: int = 0             # which wrapper sentence
+    style:  int = 0             # which wording of the operation itself
 
 
 # --------------------------------------------------------------------------
@@ -244,107 +245,172 @@ def evaluate(node, args=(), arr=None):
 # View 2: the question
 # --------------------------------------------------------------------------
 
-_OPWORD = {'add': 'plus', 'sub': 'minus', 'mul': 'times',
-           'and': 'bitwise AND', 'orr': 'bitwise OR', 'eor': 'bitwise XOR',
-           'lsl': 'shifted left by', 'lsr': 'shifted right by'}
+# ---------------------------------------------------------------------------
+# Surface wordings. THREE styles per construct.
+#
+# The corpus previously had exactly one wording per operation, so the model
+# never saw the same meaning expressed two ways and never learned that meaning
+# survives rephrasing -- "Sum the array" produced a confident, valid, WRONG
+# program. The 16 wrappers did not help: they vary only the packaging, which
+# carries no meaning, and the model learned to discard them entirely (all 16
+# produce byte-identical output).
+#
+# Style 0 reproduces the original strings exactly, so the golden set stays
+# valid. split.py holds one style out of training entirely, which makes
+# paraphrase robustness measurable for the first time.
+# ---------------------------------------------------------------------------
 
-_CMPWORD = {'eq': 'equal to', 'ne': 'not equal to', 'lt': 'less than',
-            'le': 'at most', 'gt': 'greater than', 'ge': 'at least'}
+N_STYLES = 3
 
-_MAPWORD = {None: '', 'square': 'the squares of ', 'double': 'double ',
-            'addk': '', 'mulk': '', 'constk': ''}
+_OPWORD = {
+    'add': ('plus', 'added to', 'summed with'),
+    'sub': ('minus', 'less', 'reduced by'),
+    'mul': ('times', 'multiplied by', 'scaled by'),
+    'and': ('bitwise AND', 'AND-ed with', 'masked with'),
+    'orr': ('bitwise OR', 'OR-ed with', 'bitwise-or-ed with'),
+    'eor': ('bitwise XOR', 'XOR-ed with', 'exclusive-OR-ed with'),
+    'lsl': ('shifted left by', 'left-shifted by', 'moved left by'),
+    'lsr': ('shifted right by', 'right-shifted by', 'moved right by'),
+}
 
-_PREDWORD = {'even': 'even ', 'odd': 'odd ', 'gt': '', 'lt': '', 'divk': ''}
+_CMPWORD = {
+    'eq': ('equal to', 'the same as', 'exactly'),
+    'ne': ('not equal to', 'different from', 'anything other than'),
+    'lt': ('less than', 'below', 'smaller than'),
+    'le': ('at most', 'no more than', 'not above'),
+    'gt': ('greater than', 'above', 'larger than'),
+    'ge': ('at least', 'no less than', 'not below'),
+}
+
+_NOUN = {
+    'sum':     ('the sum of', 'the total of', 'everything added up from'),
+    'product': ('the product of', 'the result of multiplying',
+                'the product formed from'),
+    'count':   ('how many of', 'the number of', 'a count of'),
+    'min':     ('the smallest of', 'the minimum of', 'the lowest of'),
+    'max':     ('the largest of', 'the maximum of', 'the highest of'),
+}
+
+_MAPWORD = {
+    None:     ('', '', ''),
+    'square': ('the squares of ', 'the squared values of ', 'the second powers of '),
+    'double': ('double ', 'twice ', 'two times '),
+    'addk':   ('', '', ''),
+    'mulk':   ('', '', ''),
+    'constk': ('', '', ''),
+}
+
+_MAPTAIL = {
+    'addk': (', each increased by {k}', ', with {k} added to each',
+             ', after adding {k} to each'),
+    'mulk': (', each multiplied by {k}', ', with each scaled by {k}',
+             ', after multiplying each by {k}'),
+}
+
+_PREDWORD = {
+    'even': ('even ', 'even-numbered ', 'even-valued '),
+    'odd':  ('odd ', 'odd-numbered ', 'odd-valued '),
+    'gt':   ('', '', ''),
+    'lt':   ('', '', ''),
+    'divk': ('', '', ''),
+}
+
+_PREDTAIL = {
+    'gt':   (' that are greater than {k}', ' above {k}', ' larger than {k}'),
+    'lt':   (' that are less than {k}', ' below {k}', ' smaller than {k}'),
+    'divk': (' that are divisible by {k}', ' that are multiples of {k}',
+             ' divisible evenly by {k}'),
+}
+
+_RANGE = ('the {f}integers from {lo} to {hi}',
+          'the {f}integers between {lo} and {hi}',
+          'every {f}integer from {lo} up to {hi}')
+
+_ARRAY = ('the {f}elements of the array',
+          'the {f}values in the array',
+          "the array's {f}elements")
+
+_LITERAL = ('the {f}elements of {a}', 'the {f}values in {a}',
+            'the {f}entries of {a}')
+
+_UNARY = {
+    'neg': ('the negation of {x}', 'minus {x}', 'the negative of {x}'),
+    'abs': ('the absolute value of {x}', 'the magnitude of {x}',
+            'the size of {x} ignoring sign'),
+}
 
 
-def _operand(node):
+def _w(table, key, style):
+    """One wording from a style tuple, wrapping if a table is short."""
+    opts = table[key]
+    return opts[style % len(opts)]
+
+
+def _operand(node, style):
     """Render a sub-expression, bracketed when its grouping is not obvious."""
-    text = show(node)
+    text = show(node, style)
     return f'({text})' if isinstance(node, (Bin, Cmp, Sel)) else text
 
 
-def show(node):
-    """Render a node as an English noun phrase."""
+def _mods(node, style):
+    """(prefix-before-noun, suffix-after-source) for a loop's map and filter."""
+    pre = _w(_MAPWORD, node.mapf, style) if node.mapf else ''
+    filt = _w(_PREDWORD, node.pred[0], style) if node.pred else ''
+    tail = ''
+    if node.pred and node.pred[0] in _PREDTAIL:
+        tail += _w(_PREDTAIL, node.pred[0], style).format(k=node.pred[1])
+    if node.mapf in _MAPTAIL:
+        tail += _w(_MAPTAIL, node.mapf, style).format(k=node.k)
+    return pre, filt, tail
+
+
+def show(node, style=0):
+    """Render a node as an English noun phrase, in one of N_STYLES wordings."""
+    sh = lambda n: show(n, style)
+
     if isinstance(node, Const):
         return str(node.v)
     if isinstance(node, Arg):
         return f'w{node.i}'
-    if isinstance(node, Bin):
-        # Nested operands MUST be bracketed. "21 plus 95 times 42" reads by
-        # ordinary precedence as 21 + (95*42), but the tree means (21+95)*42 --
-        # the oracle and the assembly would agree with each other while the
-        # QUESTION says something else, training the model on a mislabelled
-        # example that no amount of execution testing can catch.
-        return f'{_operand(node.a)} {_OPWORD[node.op]} {_operand(node.b)}'
-    if isinstance(node, Un):
-        return (f'the negation of {show(node.a)}' if node.op == 'neg'
-                else f'the absolute value of {show(node.a)}')
-    if isinstance(node, Cmp):
-        return f'{show(node.a)} is {_CMPWORD[node.op]} {show(node.b)}'
-    if isinstance(node, Sel):
-        return f'{show(node.a)} if {show(node.c)}, otherwise {show(node.b)}'
-    if isinstance(node, Loop):
-        if node.op == 'countdown':
-            return f'zero after counting down from {show(node.hi)}'
-        if node.mapf == 'constk':
-            return (f'the result of adding {node.k} once for every integer '
-                    f'from {show(node.lo)} to {show(node.hi)}')
-        body = _MAPWORD[node.mapf]
-        filt = _PREDWORD[node.pred[0]] if node.pred else ''
-        noun = {'sum': 'the sum of', 'product': 'the product of',
-                'count': 'how many of', 'min': 'the smallest of',
-                'max': 'the largest of'}[node.op]
-        tail = f'the {filt}integers from {show(node.lo)} to {show(node.hi)}'
-        extra = ''
-        if node.pred and node.pred[0] in ('gt', 'lt', 'divk'):
-            w = {'gt': 'greater than', 'lt': 'less than',
-                 'divk': 'divisible by'}[node.pred[0]]
-            extra = f' that are {w} {node.pred[1]}'
-        if node.mapf == 'addk':
-            extra += f', each increased by {node.k}'
-        if node.mapf == 'mulk':
-            extra += f', each multiplied by {node.k}'
-        return f'{noun} {body}{tail}{extra}'
     if isinstance(node, InArr):
         return 'the array'
     if isinstance(node, InLen):
         return 'the length of the array'
-    if isinstance(node, Arr):
-        return '[' + ', '.join(show(x) for x in node.items) + ']'
-    if isinstance(node, Index):
-        return f'element at index {show(node.idx)} of {show(node.arr)}'
+    if isinstance(node, Bin):
+        return (f'{_operand(node.a, style)} {_w(_OPWORD, node.op, style)} '
+                f'{_operand(node.b, style)}')
+    if isinstance(node, Un):
+        return _w(_UNARY, node.op, style).format(x=sh(node.a))
+    if isinstance(node, Cmp):
+        return f'{sh(node.a)} is {_w(_CMPWORD, node.op, style)} {sh(node.b)}'
+    if isinstance(node, Sel):
+        return f'{sh(node.a)} if {sh(node.c)}, otherwise {sh(node.b)}'
+
+    if isinstance(node, Loop):
+        if node.op == 'countdown':
+            return f'zero after counting down from {sh(node.hi)}'
+        if node.mapf == 'constk':
+            return (f'the result of adding {node.k} once for every integer '
+                    f'from {sh(node.lo)} to {sh(node.hi)}')
+        pre, filt, tail = _mods(node, style)
+        src = _RANGE[style % len(_RANGE)].format(f=filt, lo=sh(node.lo), hi=sh(node.hi))
+        return f'{_w(_NOUN, node.op, style)} {pre}{src}{tail}'
+
     if isinstance(node, ArrLoop):
-        # The predicate MUST reach the question. Without it a filtered loop
-        # reads exactly like an unfiltered one, and the label is wrong while
-        # the oracle and the assembly still agree -- the same failure as the
-        # unbracketed nested expression.
-        noun = {'sum': 'the sum of', 'product': 'the product of',
-                'count': 'how many of', 'min': 'the smallest of',
-                'max': 'the largest of'}[node.op]
-        body = _MAPWORD[node.mapf]
-        filt, extra = '', ''
-        if node.pred:
-            kind, k = node.pred
-            filt = _PREDWORD[kind]
-            if kind in ('gt', 'lt', 'divk'):
-                w = {'gt': 'greater than', 'lt': 'less than',
-                     'divk': 'divisible by'}[kind]
-                extra = f' that are {w} {k}'
-        if node.mapf == 'addk':
-            extra += f', each increased by {node.k}'
-        if node.mapf == 'mulk':
-            extra += f', each multiplied by {node.k}'
-        where = 'the array' if isinstance(node.arr, InArr) else show(node.arr)
-        return f'{noun} {body}the {filt}elements of {where}{extra}'
+        pre, filt, tail = _mods(node, style)
+        if isinstance(node.arr, InArr):
+            src = _ARRAY[style % len(_ARRAY)].format(f=filt)
+        else:
+            src = _LITERAL[style % len(_LITERAL)].format(f=filt, a=sh(node.arr))
+        return f'{_w(_NOUN, node.op, style)} {pre}{src}{tail}'
+
+    if isinstance(node, Arr):
+        return '[' + ', '.join(sh(x) for x in node.items) + ']'
+    if isinstance(node, Index):
+        return f'element at index {sh(node.idx)} of {sh(node.arr)}'
     raise TypeError(f'cannot render {node!r}')
 
 
-# Surface variety. With only three fixed phrasings the model was barely tested
-# on "based on what is described" -- and the novel-task probe showed the
-# failure mode, where it matched a familiar sentence shape and silently dropped
-# the qualifier that changed the code. These vary the verb, the framing, the
-# register mention and the word order, so the DESCRIPTION has to be read rather
-# than pattern-matched.
 _PHRASINGS = [
     'Write a function that returns {body} in w0.',
     'Compute {body}, leaving the result in w0.',
@@ -391,4 +457,4 @@ def question(prog):
         names = ', '.join(f'w{base + i}' for i in range(prog.n_args))
         args += f' The inputs are in {names}.'
     return _PHRASINGS[prog.phrase % len(_PHRASINGS)].format(
-        body=show(prog.body)) + args
+        body=show(prog.body, prog.style)) + args

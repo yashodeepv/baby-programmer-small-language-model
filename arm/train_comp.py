@@ -151,6 +151,8 @@ def main():
         # code is identical at every length, so a gap here means the model
         # learned a length rather than an algorithm.
         'size':  splitmod.eval_size(args.eval_n, held),
+        # trained cells, trained constants -- only the WORDING is new
+        'para':  splitmod.eval_paraphrase(args.eval_n, held, train_qs),
     }
     for k, v in evals.items():
         print(f'  eval[{k}]  {len(v)} programs')

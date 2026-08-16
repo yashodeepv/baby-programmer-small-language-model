@@ -37,6 +37,12 @@ BINOPS = ['add', 'sub', 'mul', 'and', 'orr', 'eor', 'lsl', 'lsr']
 CMPOPS = ['eq', 'ne', 'lt', 'le', 'gt', 'ge']
 DIVK   = [2, 4, 8, 16]              # powers of two only; lowering masks
 
+# Wordings the model may train on. Style 2 is withheld entirely, so a held-out
+# paraphrase split can ask the question the corpus could never answer before:
+# does meaning survive a rephrasing never seen in training?
+TRAIN_STYLES = (0, 1)
+HELDOUT_STYLE = 2
+
 
 # --------------------------------------------------------------------------
 # Structural identity
@@ -247,7 +253,7 @@ def sample_program(rng):
     # never reads; count what the tree actually references.
     used = _max_arg(body)
     return Program(body, n_args=used + 1, shape=shape_of(body),
-                   phrase=rng.randrange(16))
+                   phrase=rng.randrange(16), style=rng.choice(TRAIN_STYLES))
 
 
 def _max_arg(n, best=-1):

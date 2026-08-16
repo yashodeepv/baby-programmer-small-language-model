@@ -159,6 +159,29 @@ def eval_combo(n, held, seed=778):
     return [make_cell_program(cells[i % len(cells)], rng) for i in range(n)]
 
 
+def eval_paraphrase(n, held, train_questions, seed=782):
+    """Trained cells and trained constants, but a WORDING never seen.
+
+    Every other split varies what is asked. This varies only how it is asked,
+    which is the one thing the old corpus could not test at all -- it had a
+    single wording per operation, so "meaning survives rephrasing" was never
+    demonstrated and never learned.
+    """
+    from ir import question
+    rng = random.Random(seed)
+    out, guard = [], 0
+    while len(out) < n and guard < n * 400:
+        guard += 1
+        p = grammar.sample_program(rng)
+        if cell_of(p) in held or depth_of(p.body) > TRAIN_MAX_DEPTH:
+            continue
+        p.style = grammar.HELDOUT_STYLE          # the unseen wording
+        if question(p) in train_questions:
+            continue
+        out.append(p)
+    return out
+
+
 def eval_size(n, held, seed=781):
     """Programs over the input array, to be verified at unseen lengths."""
     rng = random.Random(seed)
