@@ -155,6 +155,71 @@ def check_arrays():
     return bad
 
 
+# s-expression surface. These strings were written by hand from the English
+# description, NOT produced by sexpr.emit -- so a bug in the emitter, or an
+# ambiguity in the surface syntax, shows up here rather than silently training
+# the model on a target that means something else.
+SEXPR_GOLDEN = [
+    ("the sum of the even integers from 2 to 20",
+     "(sum (rng 2 20) :even)",                       110),
+    ("the product of the integers from 2 to 5",
+     "(product (rng 2 5))",                          120),
+    ("how many odd integers from 1 to 10",
+     "(count (rng 1 10) :odd)",                        5),
+    ("the sum of the squares of the integers from 1 to 5",
+     "(sum (rng 1 5) :sq)",                           55),
+    ("the sum of 1 to 4, each increased by 10",
+     "(sum (rng 1 4) :add 10)",                       50),
+    ("the sum of the integers 1 to 20 divisible by 4",
+     "(sum (rng 1 20) :divk 4)",                      60),
+    ("zero after counting down from 7",
+     "(down 7)",                                       0),
+    ("9 plus 12",                  "(add 9 12)",      21),
+    ("(21 plus 95) times 42",      "(mul (add 21 95) 42)", 4872),
+    ("the absolute value of -5",   "(abs -5)",         5),
+    ("1 if 13 is greater than 24, else 0",
+     "(gt 13 24)",                                     0),
+    ("element at index 2 of [5, 9, 2, 7]",
+     "(idx (lit 5 9 2 7) 2)",                          2),
+    ("the sum of the elements of [5, 9, 2, 7]",
+     "(sum (lit 5 9 2 7))",                           23),
+]
+
+ARRAY_SEXPR_GOLDEN = [
+    ("the sum of the elements of the array",  "(sum (arr))",        [4, 9, 2], 15),
+    ("the largest even element of the array", "(max (arr) :even)",  [3, 8, 5, 12], 12),
+    ("the smallest element of the array",     "(min (arr))",        [9, 4, 7],  4),
+    ("how many elements exceed 10",           "(count (arr) :gt 10)", [4, 20, 11, 9], 2),
+    ("the length of the array",               "(len)",              [5, 5, 5],  3),
+]
+
+
+def check_sexpr():
+    """Hand-written s-expressions must parse to IR that means what the English says,
+    and must be exactly what the emitter produces."""
+    from sexpr import emit, parse
+    bad = []
+    for desc, text, want in SEXPR_GOLDEN:
+        node = parse(text)
+        got = evaluate(node, (), None)
+        if got != want:
+            bad.append((desc, 'value', want, got))
+        if emit(node) != text:
+            bad.append((desc, 'emit', text, emit(node)))
+    for desc, text, arr, want in ARRAY_SEXPR_GOLDEN:
+        node = parse(text)
+        got = evaluate(node, (), arr)
+        if got != want:
+            bad.append((desc, 'value', want, got))
+        if emit(node) != text:
+            bad.append((desc, 'emit', text, emit(node)))
+    n = (len(SEXPR_GOLDEN) + len(ARRAY_SEXPR_GOLDEN)) * 2
+    print(f's-expressions vs hand-written: {n - len(bad)}/{n} agree')
+    for d, w, want, got in bad:
+        print(f'  MISMATCH [{w}] {d}: want {want!r}, got {got!r}')
+    return bad
+
+
 # The renderer is the third view, and the only one execution cannot check: if
 # the question says something other than what the code does, the oracle and the
 # assembly still agree and verification goes green on a mislabelled example.
@@ -254,6 +319,7 @@ if __name__ == '__main__':
     b = check_lowering()
     c = check_renderer()
     d = check_arrays()
+    e = check_sexpr()
     print()
-    print('GOLDEN SET PASSES' if not (a or b or c or d) else 'GOLDEN SET FAILS')
-    sys.exit(1 if (a or b or c or d) else 0)
+    print('GOLDEN SET PASSES' if not (a or b or c or d or e) else 'GOLDEN SET FAILS')
+    sys.exit(1 if (a or b or c or d or e) else 0)
