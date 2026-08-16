@@ -22,10 +22,71 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import torch
 
-from ir import question
+from ir import Program, question
 from verify_ir import build_cases, verify_cases
 
 PROMPT = "USER: {q}\nASSISTANT:"
+
+
+def first_line(text):
+    """The s-expression target is one line; take it, ignoring any invented
+    next turn the model rolls into."""
+    for raw in text.split('USER:')[0].split('\n'):
+        line = raw.strip()
+        if line:
+            return line
+    return ''
+
+
+def evaluate_sexpr(model, tok, progs, seed=0, sizes=None, max_new_tokens=90):
+    """Score the model as a PARSER rather than a generator.
+
+    Three outcomes, deliberately separated:
+      unparseable  the output is not valid IR at all -- the analogue of
+                   "does not compile"
+      exact        the parsed IR is structurally identical to the reference
+      equivalent   it lowers and executes identically on every input, even if
+                   expressed differently. This is the honest headline: a
+                   differently-shaped but correct parse IS a correct parse.
+    """
+    import sexpr
+    from lower import lower
+    from verify_ir import ARRAY_SIZES
+
+    texts = generate(model, tok, progs, max_new_tokens=max_new_tokens)
+    spec = build_cases(progs, random.Random(seed), sizes=sizes or ARRAY_SIZES)
+
+    st = {'n': len(progs), 'parsed': 0, 'exact': 0, 'equivalent': 0}
+    cases, idx = [], []
+    for i, ((p, vecs), t) in enumerate(zip(spec, texts)):
+        line = first_line(t)
+        try:
+            got = sexpr.parse(line)
+        except Exception:
+            continue
+        st['parsed'] += 1
+        if got == p.body:
+            st['exact'] += 1
+        if not vecs:
+            continue
+        try:
+            lines = lower(Program(got, n_args=sexpr.n_args_of(got)))
+        except Exception:
+            continue          # parses, but cannot be lowered (e.g. too deep)
+        cases.append((lines, vecs))
+        idx.append(i)
+
+    if cases:
+        res, _ = verify_cases(cases)
+        st['equivalent'] = sum(1 for ok, n in res if n and ok == n)
+    return st, texts
+
+
+def fmt_sexpr(st):
+    n = st['n'] or 1
+    return (f"parsed {st['parsed']:>4}/{st['n']} ({100*st['parsed']/n:5.1f}%)  "
+            f"exact {st['exact']:>4} ({100*st['exact']/n:5.1f}%)  "
+            f"equivalent {st['equivalent']:>4} ({100*st['equivalent']/n:5.1f}%)")
 
 
 def parse_answer(text):

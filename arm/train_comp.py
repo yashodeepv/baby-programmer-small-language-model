@@ -32,12 +32,18 @@ from tokenizer import ArmTokenizer
 from ir import question
 from lower import lower
 import split as splitmod
-from eval_comp import evaluate, fmt
+from eval_comp import evaluate, evaluate_sexpr, fmt, fmt_sexpr
 
 
 def render(prog):
     body = '\n'.join(l if l.endswith(':') else '    ' + l for l in lower(prog))
     return f'USER: {question(prog)}\nASSISTANT:\n{body}\n    ret\n'
+
+
+def render_sexpr(prog):
+    """Target the meaning, not the code. lower() produces the assembly."""
+    from sexpr import emit
+    return f'USER: {question(prog)}\nASSISTANT:\n{emit(prog.body)}\n'
 
 
 def get_batch(data, block_size, batch_size):
@@ -67,6 +73,10 @@ def main():
     ap.add_argument('--n-train', type=int, default=24000)
     ap.add_argument('--steps', type=int, default=4000)
     ap.add_argument('--batch-size', type=int, default=32)
+    # 384 suits the assembly target. For --target sexpr the training corpus
+    # fits in 128, but the DEPTH eval reaches 204 tokens (depth-4 expressions
+    # are long), so sizing on the training corpus alone would silently truncate
+    # that eval and score it near zero for the wrong reason. 256 covers it.
     ap.add_argument('--block-size', type=int, default=384)
     ap.add_argument('--lr', type=float, default=3e-4)
     ap.add_argument('--eval-interval', type=int, default=500)
@@ -83,6 +93,8 @@ def main():
     ap.add_argument('--train-max-depth', type=int, default=3)
     ap.add_argument('--eval-depth', type=int, default=4)
     ap.add_argument('--tag', default='phase3')
+    ap.add_argument('--target', choices=['asm', 'sexpr'], default='asm',
+                    help='what the model learns to produce')
     ap.add_argument('--facts', type=int, default=2500,
                     help='factual ISA Q&A pairs to mix into training')
     args = ap.parse_args()
@@ -102,7 +114,8 @@ def main():
     train_progs = splitmod.train_programs(args.n_train, held, seed=args.seed,
                                          max_depth=args.train_max_depth)
     train_qs = {question(p) for p in train_progs}
-    blocks = [render(p) for p in train_progs]
+    render_fn = render_sexpr if args.target == 'sexpr' else render
+    blocks = [render_fn(p) for p in train_progs]
 
     # Factual Q&A is the other half of the goal: answer basic questions about
     # the ISA, not only write code for described computations.
@@ -151,19 +164,22 @@ def main():
     for step in range(args.steps + 1):
         if step % args.eval_interval == 0:
             L = estimate_loss(model, splits, args.block_size, args.batch_size)
-            st = {k: evaluate(model, tok, v,
-                              sizes=splitmod.TEST_SIZES if k == 'size' else None)[0]
+            scorer = evaluate_sexpr if args.target == 'sexpr' else evaluate
+            st = {k: scorer(model, tok, v,
+                            sizes=splitmod.TEST_SIZES if k == 'size' else None)[0]
                   for k, v in evals.items()}
             mins = (time.time() - start) / 60
             fact_acc, _ = (factmod.score(model, tok, fact_eval)
                            if args.facts else (0.0, []))
             line = (f'step {step:>5} | val {L["val"]:.3f} | ' +
-                    ' | '.join(f'{k} {100*s["correct"]/max(s["n"],1):5.1f}%'
-                               for k, s in st.items()) +
+                    ' | '.join(
+                        f'{k} {100*s.get("equivalent", s.get("correct", 0))/max(s["n"],1):5.1f}%'
+                        for k, s in st.items()) +
                     (f' | facts {100*fact_acc:5.1f}%' if args.facts else '') +
                     f' | {mins:.1f}m')
-            if st['seen']['correct'] > best:
-                best = st['seen']['correct']
+            key = 'equivalent' if args.target == 'sexpr' else 'correct'
+            if st['seen'][key] > best:
+                best = st['seen'][key]
                 save_checkpoint(args.out, model, tok.stoi, tok.itos, tok.vocab_size)
                 line += '  <- best'
             save_checkpoint(last_path, model, tok.stoi, tok.itos, tok.vocab_size)
@@ -185,9 +201,14 @@ def main():
     print(f'\nbest seen-cell score saved to {args.out}')
     print('\n--- final, in detail ---')
     for k, v in evals.items():
-        st, _ = evaluate(model, tok, v,
-                         sizes=splitmod.TEST_SIZES if k == 'size' else None)
-        print(f'  {k:6} {fmt(st)}')
+        if args.target == 'sexpr':
+            st, _ = evaluate_sexpr(model, tok, v,
+                                   sizes=splitmod.TEST_SIZES if k == 'size' else None)
+            print(f'  {k:6} {fmt_sexpr(st)}')
+        else:
+            st, _ = evaluate(model, tok, v,
+                             sizes=splitmod.TEST_SIZES if k == 'size' else None)
+            print(f'  {k:6} {fmt(st)}')
     return 0
 
 
