@@ -174,7 +174,12 @@ step-by-step decomposition (0.7%).
 against 90.0% on wordings it was trained on. Three wordings per operation is an
 improvement over one, but it did not generalize to a fourth.
 
-**Constants far outside the trained range still degrade.** Range bounds train at
+**Plain constants above 500 truncate, in both releases.** They are sampled
+`0–500` during training; `Compute 750` comes back as `mov w0, #75`. This is not
+a regression in v1.1 — v1.0 does it too — but it was previously undocumented,
+and the architecture page claimed the opposite.
+
+**Range bounds far outside the trained range still degrade.** Range bounds train at
 `hi ≤ 100`; v1.1 holds 80% out to 400, which is a large improvement on v1.0's
 22% but is not the 95% it manages in-band. If you need a specific large bound,
 check the emitted `mov` against what you asked for.

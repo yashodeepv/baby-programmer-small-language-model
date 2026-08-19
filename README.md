@@ -241,6 +241,12 @@ larger is extrapolation. The previous release truncated silently there — asked
 for the sum of the evens from 2 to 200 it emitted `mov w2, #20` and returned
 110, a wrong answer that compiles, runs, and looks right. v1.1 returns 10100.
 
+Plain constants are a separate slot with its own ceiling: they are sampled
+`0–500` (`arm/grammar.py:134`) and both releases truncate above it. `Compute
+750` returns `mov w0, #75`. Nothing in the model handles four-digit constants,
+so treat any value over 500 as unsupported and check the emitted `mov` against
+what you asked for.
+
 `depth` is a real wall — it survived a 13× parameter sweep, deeper training
 data, and step-by-step decomposition. The model learned a maximum nesting
 depth, not a recursion.
