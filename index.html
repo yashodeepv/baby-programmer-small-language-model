@@ -185,6 +185,99 @@
 
   <figure>
     <div class="inner">
+      <svg viewBox="0 0 860 432" role="img" aria-label="End to end. Training, offline: the grammar samples an IR tree, which renders to an English question, a target and an oracle value; the target is compiled and executed against the oracle, and only verified pairs enter the corpus that trains the model. Inference, per question: text is tokenized, the model emits an s-expression, a parser either rejects it or hands it to the compiler, which lowers it to AArch64, C, Python or JavaScript. The model is the only learned component; everything else is deterministic.">
+        <defs>
+          <marker id="e1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c8bcae"/></marker>
+          <marker id="e2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#a2541f"/></marker>
+          <marker id="e3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#a3392a"/></marker>
+        </defs>
+
+        <rect class="bx-d" x="8" y="8" width="844" height="182" rx="4"/>
+        <text class="t-s" x="22" y="28">TRAINING — offline, once</text>
+
+        <rect class="bx" x="24" y="96" width="96" height="38" rx="4"/>
+        <text class="t" x="72" y="120" text-anchor="middle">grammar</text>
+        <path class="ln" d="M120,115 L140,115" marker-end="url(#e1)"/>
+
+        <rect class="bx" x="144" y="96" width="84" height="38" rx="4"/>
+        <text class="t" x="186" y="120" text-anchor="middle">IR tree</text>
+
+        <path class="ln" d="M228,110 C242,110 240,70 252,67" marker-end="url(#e1)"/>
+        <path class="ln" d="M228,115 L252,115" marker-end="url(#e1)"/>
+        <path class="ln" d="M228,120 C242,120 240,160 252,163" marker-end="url(#e1)"/>
+
+        <rect class="bx" x="256" y="52" width="152" height="30" rx="4"/>
+        <text class="t" x="332" y="72" text-anchor="middle">question (English)</text>
+        <rect class="bx-a" x="256" y="100" width="152" height="30" rx="4"/>
+        <text class="t-a" x="332" y="120" text-anchor="middle">target: s-expression</text>
+        <rect class="bx" x="256" y="148" width="152" height="30" rx="4"/>
+        <text class="t" x="332" y="168" text-anchor="middle">oracle value</text>
+
+        <path class="ln" d="M408,115 L432,120" marker-end="url(#e1)"/>
+        <path class="ln" d="M408,163 C424,163 428,140 434,130" marker-end="url(#e1)"/>
+        <rect class="bx" x="436" y="100" width="120" height="38" rx="4"/>
+        <text class="t" x="496" y="118" text-anchor="middle">verify</text>
+        <text class="t-s" x="496" y="132" text-anchor="middle">build + run + compare</text>
+
+        <path class="ln" d="M408,67 C500,67 520,70 596,100" marker-end="url(#e1)"/>
+        <path class="ln" d="M556,119 L596,119" marker-end="url(#e1)"/>
+        <rect class="bx" x="600" y="100" width="112" height="38" rx="4"/>
+        <text class="t" x="656" y="118" text-anchor="middle">corpus</text>
+        <text class="t-s" x="656" y="132" text-anchor="middle">26,000 verified</text>
+
+        <path class="ln-a" d="M712,119 L736,119" marker-end="url(#e2)"/>
+        <rect class="bx-a" x="740" y="100" width="96" height="38" rx="4"/>
+        <text class="t-a" x="788" y="124" text-anchor="middle">train</text>
+
+        <rect class="bx-d" x="8" y="204" width="844" height="186" rx="4"/>
+        <text class="t-s" x="22" y="224" text-anchor="start">INFERENCE — every question</text>
+
+        <rect class="bx" x="24" y="256" width="104" height="38" rx="4"/>
+        <text class="t" x="76" y="280" text-anchor="middle">your question</text>
+        <path class="ln" d="M128,275 L148,275" marker-end="url(#e1)"/>
+
+        <rect class="bx" x="152" y="256" width="92" height="38" rx="4"/>
+        <text class="t" x="198" y="280" text-anchor="middle">tokenizer</text>
+        <path class="ln-a" d="M244,275 L264,275" marker-end="url(#e2)"/>
+
+        <rect class="bx-a" x="268" y="256" width="112" height="38" rx="4"/>
+        <text class="t-a" x="324" y="274" text-anchor="middle">model</text>
+        <text class="t-s" x="324" y="288" text-anchor="middle">25.8M, learned</text>
+        <path class="ln-a" d="M380,275 L400,275" marker-end="url(#e2)"/>
+
+        <rect class="bx-a" x="404" y="256" width="164" height="38" rx="4"/>
+        <text class="t-a" x="486" y="280" text-anchor="middle">(sum (rng 2 20) :even)</text>
+        <path class="ln" d="M568,275 L592,275" marker-end="url(#e1)"/>
+
+        <rect class="bx" x="596" y="256" width="104" height="38" rx="4"/>
+        <text class="t" x="648" y="274" text-anchor="middle">parse</text>
+        <text class="t-s" x="648" y="288" text-anchor="middle">the gate</text>
+
+        <path class="ln-r" d="M600,294 C480,312 330,344 234,352" marker-end="url(#e3)"/>
+        <rect class="bx" x="24" y="336" width="204" height="36" rx="4"/>
+        <text class="t" x="126" y="352" text-anchor="middle">malformed → rejected</text>
+        <text class="t-s" x="126" y="365" text-anchor="middle">never reaches codegen</text>
+
+        <path class="ln" d="M646,294 C646,318 580,326 512,340" marker-end="url(#e1)"/>
+        <rect class="bx" x="300" y="336" width="208" height="36" rx="4"/>
+        <text class="t" x="404" y="352" text-anchor="middle">compiler</text>
+        <text class="t-s" x="404" y="365" text-anchor="middle">lower.py · backends.py</text>
+
+        <path class="ln" d="M508,354 L528,354" marker-end="url(#e1)"/>
+        <rect class="bx" x="532" y="336" width="304" height="36" rx="4"/>
+        <text class="t" x="684" y="358" text-anchor="middle">AArch64 · C · Python · JavaScript</text>
+
+        <text class="t-s" x="22" y="414">shaded = learned (the only trained component) · plain = deterministic, verified against the oracle</text>
+      </svg>
+    </div>
+    <figcaption><b>FIG. 01</b> The whole system. The model's entire job is the middle of the lower lane: English in, one s-expression out. Everything before it is a verified data pipeline; everything after it is a compiler.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="inner">
       <svg viewBox="0 0 860 250" role="img" aria-label="A sampled IR tree fans out into a question, assembly and an oracle. Assembly and oracle meet in the verifier; only verified programs reach the corpus, which trains the model.">
         <defs>
           <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
@@ -256,7 +349,7 @@
         <path class="ln-r" d="M128,208 C168,208 178,150 190,148" marker-end="url(#a3)"/>
       </svg>
     </div>
-    <figcaption><b>FIG. 01</b> One sampled IR tree yields three views. Assembly and oracle meet in the verifier; only what survives reaches the corpus.</figcaption>
+    <figcaption><b>FIG. 02</b> One sampled IR tree yields three views. Assembly and oracle meet in the verifier; only what survives reaches the corpus.</figcaption>
   </figure>
 
   <div class="note">
@@ -298,7 +391,7 @@
         <text class="t-b" x="276" y="147">110</text>
       </svg>
     </div>
-    <figcaption><b>FIG. 02</b> Three derived views. Change <code>pred</code> to <code>odd</code> and all three change together.</figcaption>
+    <figcaption><b>FIG. 03</b> Three derived views. Change <code>pred</code> to <code>odd</code> and all three change together.</figcaption>
   </figure>
 
   <div class="prose">
@@ -410,7 +503,7 @@
         <text class="t-s" x="494" y="196" text-anchor="middle">charge the culprit, rebuild and re-run the remainder — its 59 neighbours are not blamed</text>
       </svg>
     </div>
-    <figcaption><b>FIG. 03</b> Batched verification. One binary per 60 programs; an unbuffered byte per program makes a hang attributable.</figcaption>
+    <figcaption><b>FIG. 04</b> Batched verification. One binary per 60 programs; an unbuffered byte per program makes a hang attributable.</figcaption>
   </figure>
 
   <div class="prose">
@@ -489,7 +582,7 @@ GOLDEN SET PASSES</span></code></pre>
         <text class="t-s" x="846" y="127" text-anchor="end">5 × 6 × 6 × 3 × 2</text>
       </svg>
     </div>
-    <figcaption><b>FIG. 04</b> Flexible packaging, near-rigid core. Only the highlighted phrase names the computation; one wording is chosen per question and applies to the whole phrase.</figcaption>
+    <figcaption><b>FIG. 05</b> Flexible packaging, near-rigid core. Only the highlighted phrase names the computation; one wording is chosen per question and applies to the whole phrase.</figcaption>
   </figure>
 
   <h3 id="builder">Query builder</h3>
@@ -685,7 +778,7 @@ GOLDEN SET PASSES</span></code></pre>
         <text class="t-s" x="802" y="137" text-anchor="middle">per position</text>
       </svg>
     </div>
-    <figcaption><b>FIG. 05</b> 8 layers × 8 heads × 512 dims. Attention is the only operation that moves information between positions.</figcaption>
+    <figcaption><b>FIG. 06</b> 8 layers × 8 heads × 512 dims. Attention is the only operation that moves information between positions.</figcaption>
   </figure>
 
   <pre><code>q, k, v = self.qkv(x).split(n_embd, dim=2)     <span class="c">one matmul → three (B,T,512)</span>
@@ -789,7 +882,7 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
         <text class="t-a" x="454" y="483">8 · --run: clang → execute → w0 = 110</text>
       </svg>
     </div>
-    <figcaption><b>FIG. 06</b> Inference, traced from a real run. Text becomes integers at stage 4 and stays that way until stage 6.</figcaption>
+    <figcaption><b>FIG. 07</b> Inference, traced from a real run. Text becomes integers at stage 4 and stays that way until stage 6.</figcaption>
   </figure>
 
   <div class="scroll">
@@ -854,7 +947,7 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
         <text class="t-s" x="520" y="150" text-anchor="middle">linking, not merely assembling — `b loop` with no `loop:` label assembles fine and fails only at link</text>
       </svg>
     </div>
-    <figcaption><b>FIG. 07</b> The eval funnel on held-out combinations, measured at n=200. Everything parses and links; correctness is where the signal is.</figcaption>
+    <figcaption><b>FIG. 08</b> The eval funnel on held-out combinations, measured at n=200. Everything parses and links; correctness is where the signal is.</figcaption>
   </figure>
 
   <div class="scroll">
@@ -935,7 +1028,7 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
         <text class="t-s" x="440" y="168" text-anchor="end">compiled, not learned</text>
       </svg>
     </div>
-    <figcaption><b>FIG. 08</b> Same question, two architectures. Everything below the s-expression is a deterministic pass, verified against the oracle rather than trained.</figcaption>
+    <figcaption><b>FIG. 09</b> Same question, two architectures. Everything below the s-expression is a deterministic pass, verified against the oracle rather than trained.</figcaption>
   </figure>
 
   <div class="prose">
