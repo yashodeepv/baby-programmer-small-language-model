@@ -50,8 +50,8 @@ cd baby-programmer-small-language-model
 python3.11 -m venv .venv && .venv/bin/pip install torch numpy
 
 mkdir -p checkpoints
-curl -L -o checkpoints/goal_25M.pth \
-  https://github.com/yashodeepv/baby-programmer-small-language-model/releases/download/v1.0-arm/goal_25M.pth
+curl -L -o checkpoints/arm_25M_v1.1.pth \
+  https://github.com/yashodeepv/baby-programmer-small-language-model/releases/download/v1.1-arm/arm_25M_v1.1.pth
 ```
 
 Needs `clang` — the tool assembles and runs what the model writes. On macOS:
@@ -99,15 +99,24 @@ stub instead of the model.
 | `--args 12,188` | scalar inputs in `w0, w1` — or `w2, w3` when an array is present |
 | `--ckpt PATH` | use a different checkpoint |
 
+> [!WARNING]
+> `--expect N` compares the executed result against `N` and nothing else. It has
+> no idea what you asked for, so a stale `--expect` left over from a previous
+> command will happily print **PASS** for a wrong answer. Trust it only when you
+> just typed the expected value for the question you just typed.
+
 ---
 
 ## Phrasing
 
-**The model knows one wording per operation.** Reword it and you get confident,
-valid assembly that computes something else — no error, no warning.
+**The model knows two wordings per operation.** A third exists in the generator
+but is held out of training, so it can be used to measure how well the model
+survives rephrasing — it scores 18.5% there, against 90.0% on wordings it knows.
+Stray outside the two and you get confident, valid assembly that computes
+something else — no error, no warning.
 
 A question is built from two parts. The **wrapper** is flexible; the **operation
-phrase** is not.
+phrase** is nearly fixed.
 
 ### The 16 wrappers
 
@@ -137,14 +146,22 @@ goes. Any of these work; nothing else does.
 
 `X` above is assembled from these slots, and **only** these:
 
-| Slot | Exact wording |
-|---|---|
-| reduce | `the sum of` · `the product of` · `how many of` · `the smallest of` · `the largest of` |
-| source | `the integers from A to B` · `the elements of the array` · `the elements of [1, 2, 3]` |
-| filter | `even ` · `odd ` (before the noun) · `that are greater than K` · `that are less than K` · `that are divisible by K` (after) |
-| map | `the squares of ` · `double ` (before) · `, each increased by K` · `, each multiplied by K` (after) |
+Each slot has two trained wordings — either works.
 
-Composed, that reads: `the sum of the squares of the even integers from 2 to 20`.
+| Slot | Wording 1 | Wording 2 |
+|---|---|---|
+| reduce | `the sum of` · `the product of` · `how many of` · `the smallest of` · `the largest of` | `the total of` · `the result of multiplying` · `the number of` · `the minimum of` · `the maximum of` |
+| source | `the integers from A to B` · `the elements of the array` · `the elements of [1, 2, 3]` | `the integers between A and B` · `the values in the array` · `the values in [1, 2, 3]` |
+| filter | `even ` · `odd ` (before the noun) · `that are greater than K` · `that are less than K` · `that are divisible by K` (after) | `even-numbered ` · `odd-numbered ` (before) · `above K` · `below K` · `that are multiples of K` (after) |
+| map | `the squares of ` · `double ` (before) · `, each increased by K` · `, each multiplied by K` (after) | `the squared values of ` · `twice ` (before) · `, with K added to each` · `, with each scaled by K` (after) |
+
+Composed, that reads: `the sum of the squares of the even integers from 2 to 20`
+— or `the total of the squared values of the even-numbered integers between 2
+and 20`, which the model handles equally well.
+
+The full tables are `_NOUN`, `_RANGE`, `_ARRAY`, `_PREDWORD`, `_PREDTAIL`,
+`_MAPWORD` and `_MAPTAIL` in `arm/ir.py`; each is a 3-tuple whose third entry is
+the held-out wording.
 
 Other forms it knows: `element at index N of [...]`, `the length of the array`,
 `the negation of N`, `the absolute value of N`, `A plus B`, `A times B`,
@@ -160,10 +177,15 @@ Other forms it knows: `element at index N of [...]`, `the length of the array`,
 | `the sum of the even integers from 2 to 20` | "Add up the evens" |
 | `how many of the elements of the array that are greater than 10` | "Count elements over 10" |
 
-This is a **corpus limitation, not a model one** — `ir.show()` has exactly one
-rendering per node type, so no paraphrase was ever generated and none was ever
-trained on. Giving `show()` several wordings per node is the single largest
-remaining usability fix.
+All four of those still fail in v1.1 — verified, not assumed. Two wordings per
+operation buys tolerance for rephrasings that keep the sentence shape (`Total
+the elements of the array, leaving the result in w0.` works), but not for terse
+reformulations that drop the grammar's structure entirely.
+
+This remains a **corpus limitation, not a model one**. `ir.show()` now renders
+three wordings per node where it once had one, and that measurably helped —
+see [Accuracy](#accuracy) — but the held-out-wording score of 18.5% says the
+generator still has to teach the wording before the model can read it.
 
 List real examples:
 
@@ -195,18 +217,33 @@ expressions nested deeper than it was trained on.
 Each answer compiled and run against a reference oracle on ~12 inputs. Correct
 means **every** input matched.
 
+Measured at n=200 per cell on `arm_25M_v1.1`.
+
 | Test | What it measures | Correct |
 |---|---|---:|
-| seen | trained shapes, new numbers | **90.5%** |
-| combo | operation combinations never trained together | **83.0%** |
-| size | arrays longer than any seen in training | **86.0%** |
+| seen | trained shapes, new numbers | **90.0%** |
+| combo | operation combinations never trained together | **85.0%** |
+| size | arrays longer than any seen in training | **88.5%** |
 | facts | held-out questions about the instruction set | **95.0%** |
-| depth | expressions nested deeper than training | 5.5% |
+| constants | values inside the trained range | **95.0%** |
+| constants | values *outside* the trained range | 80.0% |
+| paraphrase | a wording of the operation never trained on | 18.5% |
+| depth | expressions nested deeper than training | 4.0% |
 
 `combo` says it composes operations it was never shown together. `size` says it
-learned an algorithm rather than a per-length template. `depth` is a real wall —
-it survived a 13× parameter sweep, deeper training data, and step-by-step
-decomposition. The model learned a maximum nesting depth, not a recursion.
+learned an algorithm rather than a per-length template.
+
+`constants` is the newest cell and the one worth understanding. Reproduce it
+with `.venv/bin/python arm/eval_bigconst.py --ckpt checkpoints/arm_25M_v1.1.pth`;
+the other rows come from `arm/eval_ckpt.py --eval-n 200`. Range bounds are
+sampled at `hi ≤ 100` during training (`arm/grammar.py:179-180`), so anything
+larger is extrapolation. The previous release truncated silently there — asked
+for the sum of the evens from 2 to 200 it emitted `mov w2, #20` and returned
+110, a wrong answer that compiles, runs, and looks right. v1.1 returns 10100.
+
+`depth` is a real wall — it survived a 13× parameter sweep, deeper training
+data, and step-by-step decomposition. The model learned a maximum nesting
+depth, not a recursion.
 
 ---
 
@@ -260,5 +297,7 @@ About 100 minutes on an Apple M-series GPU.
 | `arm/build_corpus.py` | generate + verify + write a corpus |
 | `arm/train_comp.py` | training loop with five evaluation metrics |
 | `arm/eval_comp.py` | generate → build → execute → compare |
+| `arm/eval_ckpt.py` | score a saved checkpoint on every cell, no retraining |
+| `arm/eval_bigconst.py` | score constants outside the trained range |
 | `arm/ask.py` | ask the model questions by hand |
 | `model.py` | the transformer |

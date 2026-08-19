@@ -149,7 +149,7 @@ def show(model, tok, q, do_run, array, scalars, expect=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('question', nargs='*', help='ask one question and exit')
-    ap.add_argument('--ckpt', default='checkpoints/goal_25M.pth')
+    ap.add_argument('--ckpt', default='checkpoints/arm_25M_v1.1.pth')
     ap.add_argument('--run', action='store_true', help='assemble and execute the answer')
     ap.add_argument('--array', default=None, help='comma-separated input array')
     ap.add_argument('--args', default=None, help='comma-separated scalar inputs')
