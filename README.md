@@ -305,5 +305,7 @@ About 100 minutes on an Apple M-series GPU.
 | `arm/eval_comp.py` | generate → build → execute → compare |
 | `arm/eval_ckpt.py` | score a saved checkpoint on every cell, no retraining |
 | `arm/eval_bigconst.py` | score constants outside the trained range |
+| `arm/backends.py` | IR → C, Python, JavaScript — the deterministic half |
+| `arm/verify_backends.py` | run every backend against the oracle |
 | `arm/ask.py` | ask the model questions by hand |
 | `model.py` | the transformer |
