@@ -401,3 +401,85 @@ class JsTarget(Target):
         return ('function f(args, arr) {\n'
                 + ('\n'.join(lines) + '\n' if lines else '')
                 + f'  return {ret};\n}}\n')
+
+
+# --------------------------------------------------------------------------
+# Java -- int is 32-bit two's complement and wraps on overflow, which is
+# exactly the oracle's s32. So the wrap helper is the identity here.
+# --------------------------------------------------------------------------
+
+class JavaTarget(Target):
+    name, ext = 'java', 'java'
+    prologue = ''
+
+    def __init__(self):
+        super().__init__()
+        self.depth = 2
+
+    def reset(self):
+        self.depth = 2
+
+    def const(self, v):  return str(v)
+    def arg(self, i):    return f'args[{i}]'
+    def ain(self):       return 'arr'
+    def alen(self):      return 'arr.length'
+    def s32(self, e):    return f'({e})'          # int already wraps
+    def mul(self, a, b): return f'(({a}) * ({b}))'
+    def absv(self, e):   return f'Math.abs({e})'
+    def index(self, seq, i): return f'{seq}[{i}]'
+
+    def binop(self, op, a, b):
+        if op in ('add', 'sub', 'mul'):
+            sym = {'add': '+', 'sub': '-', 'mul': '*'}[op]
+            return f'(({a}) {sym} ({b}))'
+        if op in ('and', 'orr', 'eor'):
+            sym = {'and': '&', 'orr': '|', 'eor': '^'}[op]
+            return f'(({a}) {sym} ({b}))'
+        if op == 'lsl':  return f'(({a}) << (({b}) & 31))'
+        if op == 'lsr':  return f'(({a}) >>> (({b}) & 31))'
+        raise ValueError(op)
+
+    def cmp(self, op, a, b):
+        sym = {'eq': '==', 'ne': '!=', 'lt': '<', 'le': '<=', 'gt': '>', 'ge': '>='}[op]
+        return f'((({a}) {sym} ({b})) ? 1 : 0)'
+
+    def select(self, c, a, b, out):
+        v = self.tmp('s')
+        out.append(self.decl(v, f'({c}) ? ({a}) : ({b})'))
+        return v
+
+    def pad(self):          return '    ' * self.depth
+    def decl(self, n, e):   return f'{self.pad()}int {n} = {e};'
+    def assign(self, n, e): return f'{self.pad()}{n} = {e};'
+
+    def arr_decl(self, n, vals):
+        return f'{self.pad()}int[] {n} = {{{", ".join(vals)}}};'
+
+    def for_range(self, v, lo, hi):
+        s = f'{self.pad()}for (int {v} = {lo}; {v} <= ({hi}); {v}++) {{'
+        self.depth += 1
+        return s
+
+    def for_each(self, v, seq):
+        s = f'{self.pad()}for (int {v} : {seq}) {{'
+        self.depth += 1
+        return s
+
+    def if_(self, cond):
+        s = f'{self.pad()}if ({cond}) {{'
+        self.depth += 1
+        return s
+
+    def end(self):
+        self.depth -= 1
+        return f'{self.pad()}}}'
+
+    def func(self, body, ret):
+        lines = [l for l in body if l is not None]
+        return ('public class Program {\n'
+                '    static int f(int[] args, int[] arr) {\n'
+                + ('\n'.join(lines) + '\n' if lines else '')
+                + f'        return {ret};\n    }}\n}}\n')
+
+
+TARGETS = {t.name: t for t in (PyTarget, CTarget, JsTarget, JavaTarget)}
