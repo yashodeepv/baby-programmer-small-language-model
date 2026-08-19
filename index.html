@@ -143,6 +143,9 @@
   .qb-btn{margin-top:12px;padding:7px 13px;font-family:var(--mono);font-size:11.5px;
           color:var(--paper);background:var(--teal);border:0;border-radius:4px;cursor:pointer}
   .qb-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  #qb-warn{margin-top:10px;padding:8px 11px;border-left:3px solid var(--amber);
+           font-size:12.5px;line-height:1.55;color:var(--amber)}
+  #qb-warn[hidden]{display:none}
   a{color:var(--teal)}
   footer{margin-top:70px;padding-top:16px;border-top:2px solid var(--ink);
          font-family:var(--mono);font-size:12px;color:var(--ink-3)}
@@ -465,7 +468,7 @@ GOLDEN SET PASSES</span></code></pre>
         <text class="t" x="652" y="62">, leaving … in w0.</text>
 
         <path class="ln-a" d="M369,68 L369,86" marker-end="url(#a2)"/>
-        <text class="t-s" x="384" y="82">assembled from four slots — two trained wordings each</text>
+        <text class="t-s" x="384" y="88">assembled from four slots</text>
 
         <rect class="bx" x="96" y="94" width="132" height="52" rx="4"/>
         <text class="t-s" x="162" y="112" text-anchor="middle">REDUCE</text>
@@ -483,7 +486,7 @@ GOLDEN SET PASSES</span></code></pre>
         <text class="t-s" x="641" y="112" text-anchor="middle">SOURCE</text>
         <text class="t" x="641" y="131" text-anchor="middle">the integers from 2 to 20</text>
 
-        <text class="t-s" x="770" y="127">5 × 6 × 6 × 3 × 2</text>
+        <text class="t-s" x="846" y="127" text-anchor="end">5 × 6 × 6 × 3 × 2</text>
       </svg>
     </div>
     <figcaption><b>FIG. 04</b> Flexible packaging, near-rigid core. Only the highlighted phrase names the computation; one wording is chosen per question and applies to the whole phrase.</figcaption>
@@ -541,11 +544,11 @@ GOLDEN SET PASSES</span></code></pre>
       </div>
       <div>
         <label for="qb-a">A / K</label>
-        <input id="qb-a" type="number" value="2">
+        <input id="qb-a" type="number" value="2" min="1" max="500">
       </div>
       <div>
         <label for="qb-b">B</label>
-        <input id="qb-b" type="number" value="20">
+        <input id="qb-b" type="number" value="20" min="3" max="100">
       </div>
       <div>
         <label for="qb-lit">Literal list</label>
@@ -555,6 +558,7 @@ GOLDEN SET PASSES</span></code></pre>
     <div class="qb-out">
       <p class="lbl">Question</p>
       <p id="qb-q"></p>
+      <p id="qb-warn" hidden></p>
       <p class="lbl" style="margin-top:14px">Command</p>
       <div id="qb-cmd"></div>
       <button class="qb-btn" id="qb-copy" type="button">Copy command</button>
@@ -973,6 +977,45 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
     var body = NOUN[op] + ' ' + pre + tail + post;
     var q = WRAP[$('qb-wrap').value].replace('{body}', body) + abi;
     $('qb-q').textContent = q;
+
+    // Values outside the ranges the generator samples are extrapolation, and
+    // the model fails them SILENTLY -- valid assembly, wrong number. Bounds
+    // mirror arm/grammar.py exactly; see the constants row in Evaluation.
+    var an = +a, bn = +b, w = [];
+    if (src === 'range') {
+      // A is sampled 1-40 but extrapolates fine in practice (90 to 95 is
+      // correct), so only the upper bound B is worth warning about.
+      if (bn > 100)            w.push('B is sampled up to 100 — above that the '
+                                    + 'bound is truncated (2 to 200 returns 110, not 10100)');
+      if (bn - an < 2)         w.push('B must be at least A + 2');
+      else if (bn - an > 60)   w.push('the span B − A is sampled 2–60');
+    }
+    if (fl === 'gt' || fl === 'lt') {
+      if (an < 2 || an > 40)   w.push('K for a greater/less-than filter is sampled 2–40');
+    } else if (fl === 'divk') {
+      if ([2, 4, 8, 16].indexOf(an) === -1)
+                               w.push('K for a divisibility filter is only ever 2, 4, 8 or 16 '
+                                    + '— lowering masks, so other divisors were never generated');
+    }
+    if (mp === 'addk' || mp === 'mulk') {
+      if (an < 2 || an > 12)   w.push('K for a map is sampled 2–12');
+    }
+    if (src === 'lit') {
+      var items = lit.split(',').map(function (x) { return x.trim(); })
+                     .filter(function (x) { return x.length; });
+      if (items.length < 3 || items.length > 5)
+                               w.push('literal lists hold 3–5 values');
+      if (items.some(function (x) { return !/^\d+$/.test(x) || +x < 1 || +x > 40; }))
+                               w.push('literal values are sampled 1–40');
+    }
+    var warn = $('qb-warn');
+    if (w.length) {
+      warn.textContent = 'Outside the trained range — the model will answer '
+                       + 'confidently and may be wrong: ' + w.join('; ') + '.';
+      warn.hidden = false;
+    } else {
+      warn.hidden = true;
+    }
     $('qb-cmd').textContent = '.venv/bin/python arm/ask.py --run' + flag + ' \\\n  "' + q + '"';
   }
 
