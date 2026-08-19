@@ -247,9 +247,16 @@ Plain constants are a separate slot with its own ceiling: they are sampled
 so treat any value over 500 as unsupported and check the emitted `mov` against
 what you asked for.
 
-`depth` is a real wall — it survived a 13× parameter sweep, deeper training
-data, and step-by-step decomposition. The model learned a maximum nesting
-depth, not a recursion.
+`depth` is the hardest wall — it survived a 13× parameter sweep, deeper
+training data, and step-by-step decomposition. The model learned a maximum
+nesting depth, not a recursion.
+
+It is not a fixed ceiling, though. The same training run scores **9.5% at step
+2250 and 3.5% at step 3000**, and its ability to even *form* a depth-4
+expression falls from 72.5% to 29.5% over those last 750 steps — while
+validation loss is still improving, 0.453 → 0.450. Part of what has been
+reported as a capability limit is a **training-duration effect**, invisible to
+a checkpoint rule that selects on the `seen` cell. See [Two targets](#two-targets).
 
 ---
 
@@ -269,6 +276,64 @@ Loop(op='sum', lo=2, hi=20, pred=('even',0))
 semantics, so a codegen bug shows up as an execution mismatch. Every generated
 program is compiled and run against the oracle on ~12 inputs before it enters
 the corpus; anything that disagrees stops the build.
+
+## Two targets
+
+`train_comp.py --target sexpr` swaps what the model emits. Instead of assembly
+it produces the IR as an s-expression, and `lower.py` compiles that to AArch64:
+
+```
+Compute the sum of the even integers from 2 to 20, leaving the result in w0.
+
+  --target asm     mov w1, #2 / mov w2, #20 / loop1: cmp w1, w2 / b.gt done2 …
+  --target sexpr   (sum (rng 2 20) :even)
+```
+
+The model then dictates the algorithm and a deterministic pass does the
+translation. `arm/backends.py` carries that further: the same IR compiles to
+**C, Python and JavaScript**, and `arm/verify_backends.py` checks every backend
+against the oracle — currently **400/400 programs × 8 input vectors, in all
+three languages, zero mismatches**. Adding a language is a `Target` subclass,
+not a corpus regeneration and a retrain.
+
+### Which target is better
+
+Same corpus, same hyperparameters, same 3000 steps; only `--target` differs.
+n=200 per cell, `equivalent` for the IR (a differently-shaped but correct parse
+is correct).
+
+| cell | asm | IR (step 2250) | IR (step 3000) |
+|---|---:|---:|---:|
+| seen | 90.0% | **93.0%** | 90.0% |
+| combo | **85.0%** | 78.5% | 81.0% |
+| size | 88.5% | **89.5%** | 83.5% |
+| para | 18.5% | **22.0%** | 19.5% |
+| depth | 4.0% | **9.5%** | 3.5% |
+| facts | 95.0% | **100.0%** | 100.0% |
+
+The IR target wins five of six cells at its best checkpoint. `combo` is the one
+real loss, by 6.5 points.
+
+### Failures become detectable
+
+The more useful difference is not accuracy, it is what a failure looks like. On
+the depth eval the assembly model emitted code that **compiled and linked
+199 times out of 200** and computed the wrong answer — 191 silent wrong answers
+returned with full confidence. The IR model produced output that does not parse
+55 times out of 200, which a compiler rejects before emitting an instruction.
+
+Equal competence; the failures move from silent to loud. That is the argument
+for the IR target, rather than the score.
+
+### Caveats
+
+Single seed, one model size. `combo` genuinely favours assembly. The two IR
+checkpoints differ enough that results are sensitive to when training stops,
+and nothing before step 2250 was saved — an earlier checkpoint may well be
+better on `depth` still. `para` sits near 20% on every architecture tried, so
+nothing here touches the paraphrase wall.
+
+---
 
 📐 **[Full architecture, diagrams and design notes →](https://yashodeepv.github.io/baby-programmer-small-language-model/)**
 
@@ -305,5 +370,7 @@ About 100 minutes on an Apple M-series GPU.
 | `arm/eval_comp.py` | generate → build → execute → compare |
 | `arm/eval_ckpt.py` | score a saved checkpoint on every cell, no retraining |
 | `arm/eval_bigconst.py` | score constants outside the trained range |
+| `arm/backends.py` | IR → C, Python, JavaScript — the deterministic half |
+| `arm/verify_backends.py` | run every backend against the oracle |
 | `arm/ask.py` | ask the model questions by hand |
 | `model.py` | the transformer |

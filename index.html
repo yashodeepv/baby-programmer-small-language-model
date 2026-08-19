@@ -143,6 +143,9 @@
   .qb-btn{margin-top:12px;padding:7px 13px;font-family:var(--mono);font-size:11.5px;
           color:var(--paper);background:var(--teal);border:0;border-radius:4px;cursor:pointer}
   .qb-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  #qb-warn{margin-top:10px;padding:8px 11px;border-left:3px solid var(--amber);
+           font-size:12.5px;line-height:1.55;color:var(--amber)}
+  #qb-warn[hidden]{display:none}
   a{color:var(--teal)}
   footer{margin-top:70px;padding-top:16px;border-top:2px solid var(--ink);
          font-family:var(--mono);font-size:12px;color:var(--ink-3)}
@@ -465,7 +468,7 @@ GOLDEN SET PASSES</span></code></pre>
         <text class="t" x="652" y="62">, leaving … in w0.</text>
 
         <path class="ln-a" d="M369,68 L369,86" marker-end="url(#a2)"/>
-        <text class="t-s" x="384" y="82">assembled from four slots — two trained wordings each</text>
+        <text class="t-s" x="384" y="88">assembled from four slots</text>
 
         <rect class="bx" x="96" y="94" width="132" height="52" rx="4"/>
         <text class="t-s" x="162" y="112" text-anchor="middle">REDUCE</text>
@@ -483,7 +486,7 @@ GOLDEN SET PASSES</span></code></pre>
         <text class="t-s" x="641" y="112" text-anchor="middle">SOURCE</text>
         <text class="t" x="641" y="131" text-anchor="middle">the integers from 2 to 20</text>
 
-        <text class="t-s" x="770" y="127">5 × 6 × 6 × 3 × 2</text>
+        <text class="t-s" x="846" y="127" text-anchor="end">5 × 6 × 6 × 3 × 2</text>
       </svg>
     </div>
     <figcaption><b>FIG. 04</b> Flexible packaging, near-rigid core. Only the highlighted phrase names the computation; one wording is chosen per question and applies to the whole phrase.</figcaption>
@@ -541,11 +544,11 @@ GOLDEN SET PASSES</span></code></pre>
       </div>
       <div>
         <label for="qb-a">A / K</label>
-        <input id="qb-a" type="number" value="2">
+        <input id="qb-a" type="number" value="2" min="1" max="500">
       </div>
       <div>
         <label for="qb-b">B</label>
-        <input id="qb-b" type="number" value="20">
+        <input id="qb-b" type="number" value="20" min="3" max="100">
       </div>
       <div>
         <label for="qb-lit">Literal list</label>
@@ -555,6 +558,7 @@ GOLDEN SET PASSES</span></code></pre>
     <div class="qb-out">
       <p class="lbl">Question</p>
       <p id="qb-q"></p>
+      <p id="qb-warn" hidden></p>
       <p class="lbl" style="margin-top:14px">Command</p>
       <div id="qb-cmd"></div>
       <button class="qb-btn" id="qb-copy" type="button">Copy command</button>
@@ -891,12 +895,80 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
 
   <div class="pull">
     <p>Asked for an expression one level deeper than training, it emits valid, compiling code that is systematically <i>too short</i> — a depth-3 program for a depth-4 question.</p>
-    <p class="src">Move the ceiling from 3 to 4 and the failure moves to 5. It learned a maximum depth, not a recursion.</p>
+    <p class="src">Move the ceiling from 3 to 4 and the failure moves to 5. It learned a maximum depth, not a recursion — but see §13: the same run scores 9.5% at step 2250 and 3.5% at step 3000, so the ceiling is partly a training-duration effect.</p>
   </div>
 
   <div class="prose">
     <p>The decomposition experiment localised it precisely: given a scratchpad to write the steps out first, on deep problems the model produced a correct decomposition <b>0.0%</b> of the time, and even the right <i>number</i> of steps only 24.7%. It cannot break down a deep problem, because breaking it down is itself the recursive act.</p>
-    <p>Untried and likely worthwhile: cosine LR decay with warmup — the observed 85 → 66 → 93 oscillation at flat loss is what a too-high late learning rate looks like; masking loss to the answer only, since about a third of each step is spent predicting prompts; rotary position embeddings, because learned absolute ones cannot extrapolate past <code>block_size</code>; and giving the question renderer several wordings per operation, the single largest usability gap today.</p>
+    <p><b>Cosine LR decay with warmup now looks less optional.</b> The oscillation at flat loss — 85 → 66 → 93 on composition — was already the signature of a too-high late learning rate, and the IR run corroborates it from another angle: over its last 750 steps the ability to <i>form</i> a depth-4 expression fell from 72.5% to 29.5% while validation loss improved 0.453 → 0.450. Late training was actively destroying a capability the model had at step 2250.</p><p>Also untried: masking loss to the answer only, since about a third of each step is spent predicting prompts; and rotary position embeddings, because learned absolute ones cannot extrapolate past <code>block_size</code>. Several wordings per operation, listed here as the largest usability gap, shipped in v1.1 — it did not move the paraphrase score much, but it fixed constant extrapolation as a side effect nobody predicted.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">13</span><span class="txt">The IR target</span></h2>
+  <div class="prose">
+    <p><code>train_comp.py --target sexpr</code> changes what the model emits. Instead of assembly it produces the IR as an s-expression, and <code>lower.py</code> compiles that to AArch64 — the model dictates the algorithm, a deterministic pass does the translation.</p>
+  </div>
+
+  <figure>
+    <div class="inner">
+      <svg viewBox="0 0 860 196" role="img" aria-label="One question feeds two architectures. The assembly target emits fourteen instructions directly. The IR target emits a nine-token s-expression which a compiler then lowers to AArch64, C, Python or JavaScript.">
+        <rect class="bx-d" x="14" y="14" width="832" height="40" rx="4"/>
+        <text class="t" x="30" y="39">Compute the sum of the even integers from 2 to 20, leaving the result in w0.</text>
+
+        <path class="ln" d="M300,54 C300,66 220,64 220,76" marker-end="url(#a1)"/>
+        <path class="ln-a" d="M560,54 C560,66 640,64 640,76" marker-end="url(#a2)"/>
+
+        <rect class="bx" x="96" y="80" width="248" height="44" rx="4"/>
+        <text class="t-s" x="220" y="98" text-anchor="middle">--target asm</text>
+        <text class="t" x="220" y="115" text-anchor="middle">mov w1, #2 … ret</text>
+
+        <rect class="bx-a" x="516" y="80" width="248" height="44" rx="4"/>
+        <text class="t-s" x="640" y="98" text-anchor="middle">--target sexpr</text>
+        <text class="t-a" x="640" y="115" text-anchor="middle">(sum (rng 2 20) :even)</text>
+
+        <text class="t-s" x="220" y="146" text-anchor="middle">one language, learned</text>
+
+        <path class="ln-a" d="M640,124 L640,140" marker-end="url(#a2)"/>
+        <rect class="bx" x="466" y="144" width="348" height="38" rx="4"/>
+        <text class="t" x="640" y="168" text-anchor="middle">AArch64 · C · Python · JavaScript</text>
+        <text class="t-s" x="440" y="168" text-anchor="end">compiled, not learned</text>
+      </svg>
+    </div>
+    <figcaption><b>FIG. 08</b> Same question, two architectures. Everything below the s-expression is a deterministic pass, verified against the oracle rather than trained.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>Same corpus, same hyperparameters, same 3000 steps; only the target differs. Measured at n=200 per cell, scoring the IR as <i>equivalent</i> — a differently-shaped but correct parse is a correct parse.</p>
+  </div>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Metric</th><th class="n">asm</th><th class="n">IR @2250</th><th class="n">IR @3000</th></tr></thead>
+    <tbody>
+      <tr><td class="m">seen</td><td class="n">90.0%</td><td class="n"><b>93.0%</b></td><td class="n">90.0%</td></tr>
+      <tr><td class="m">combo</td><td class="n"><b>85.0%</b></td><td class="n">78.5%</td><td class="n">81.0%</td></tr>
+      <tr><td class="m">size</td><td class="n">88.5%</td><td class="n"><b>89.5%</b></td><td class="n">83.5%</td></tr>
+      <tr><td class="m">para</td><td class="n">18.5%</td><td class="n"><b>22.0%</b></td><td class="n">19.5%</td></tr>
+      <tr><td class="m">depth</td><td class="n">4.0%</td><td class="n"><b>9.5%</b></td><td class="n">3.5%</td></tr>
+      <tr><td class="m">facts</td><td class="n">95.0%</td><td class="n"><b>100.0%</b></td><td class="n">100.0%</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p class="h">The score is not the interesting part — the failure mode is</p>
+    <p>On the depth eval the assembly model emitted code that <b>compiled and linked 199 times out of 200</b> and computed the wrong answer: 191 silent wrong answers, returned with full confidence and indistinguishable from correct output without an oracle. The IR model emits output that does not parse 55 times out of 200 — rejected by the compiler before a single instruction exists. Equal competence, but the failures move from silent to loud.</p>
+  </div>
+
+  <div class="prose">
+    <p><code>arm/backends.py</code> takes the same IR to <b>C, Python and JavaScript</b>. Each language's 32-bit nuances live entirely in its backend: C does arithmetic through <code>uint32_t</code> so the wrap is defined rather than undefined, JavaScript needs <code>Math.imul</code> because <code>*</code> goes through doubles, Python needs an explicit mask because its integers are unbounded. The model never learns any of it. <code>arm/verify_backends.py</code> holds every backend to the same contract the assembly path always had — run it and compare against the oracle: <b>400 programs × 8 input vectors × 3 languages, zero mismatches</b>.</p>
+    <p>Adding JavaScript took about seventy lines of syntax hooks and passed on the first run. That is the claim this section exists to support: retargeting is a compiler change, not a corpus regeneration and a retrain.</p>
+  </div>
+
+  <div class="note warn">
+    <p class="h">What this does not show</p>
+    <p>One seed, one model size. <code>combo</code> genuinely favours assembly by 6.5 points. The two IR checkpoints differ enough that the result is sensitive to when training stops, and nothing before step 2250 was saved — an earlier checkpoint may be better on <code>depth</code> still. And <code>para</code> sits near 20% on every architecture tried here, so none of this touches the paraphrase wall.</p>
   </div>
 </section>
 
@@ -973,6 +1045,45 @@ y = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=0.125)
     var body = NOUN[op] + ' ' + pre + tail + post;
     var q = WRAP[$('qb-wrap').value].replace('{body}', body) + abi;
     $('qb-q').textContent = q;
+
+    // Values outside the ranges the generator samples are extrapolation, and
+    // the model fails them SILENTLY -- valid assembly, wrong number. Bounds
+    // mirror arm/grammar.py exactly; see the constants row in Evaluation.
+    var an = +a, bn = +b, w = [];
+    if (src === 'range') {
+      // A is sampled 1-40 but extrapolates fine in practice (90 to 95 is
+      // correct), so only the upper bound B is worth warning about.
+      if (bn > 100)            w.push('B is sampled up to 100 — above that the '
+                                    + 'bound is truncated (2 to 200 returns 110, not 10100)');
+      if (bn - an < 2)         w.push('B must be at least A + 2');
+      else if (bn - an > 60)   w.push('the span B − A is sampled 2–60');
+    }
+    if (fl === 'gt' || fl === 'lt') {
+      if (an < 2 || an > 40)   w.push('K for a greater/less-than filter is sampled 2–40');
+    } else if (fl === 'divk') {
+      if ([2, 4, 8, 16].indexOf(an) === -1)
+                               w.push('K for a divisibility filter is only ever 2, 4, 8 or 16 '
+                                    + '— lowering masks, so other divisors were never generated');
+    }
+    if (mp === 'addk' || mp === 'mulk') {
+      if (an < 2 || an > 12)   w.push('K for a map is sampled 2–12');
+    }
+    if (src === 'lit') {
+      var items = lit.split(',').map(function (x) { return x.trim(); })
+                     .filter(function (x) { return x.length; });
+      if (items.length < 3 || items.length > 5)
+                               w.push('literal lists hold 3–5 values');
+      if (items.some(function (x) { return !/^\d+$/.test(x) || +x < 1 || +x > 40; }))
+                               w.push('literal values are sampled 1–40');
+    }
+    var warn = $('qb-warn');
+    if (w.length) {
+      warn.textContent = 'Outside the trained range — the model will answer '
+                       + 'confidently and may be wrong: ' + w.join('; ') + '.';
+      warn.hidden = false;
+    } else {
+      warn.hidden = true;
+    }
     $('qb-cmd').textContent = '.venv/bin/python arm/ask.py --run' + flag + ' \\\n  "' + q + '"';
   }
 
