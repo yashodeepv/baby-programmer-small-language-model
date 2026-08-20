@@ -126,14 +126,53 @@ _main:
             return None, ['did not terminate']
 
 
-def show(model, tok, q, do_run, array, scalars, expect=None):
+def translate(line, langs):
+    """An s-expression answer is an IR, so it compiles to any target we have.
+
+    This is the whole point of --target sexpr: the model states the algorithm
+    and the translation is a deterministic pass, not something it learned.
+    """
+    import sexpr
+    from backends import TARGETS
+    try:
+        node = sexpr.parse(line)
+    except Exception:
+        return None
+    out = []
+    for name in langs:
+        tgt = TARGETS.get(name)
+        if tgt is None:
+            out.append((name, f'(no backend named {name!r}; '
+                              f'have {", ".join(sorted(TARGETS))})'))
+            continue
+        try:
+            out.append((name, tgt().compile(node)))
+        except Exception as exc:
+            out.append((name, f'({type(exc).__name__}: {exc})'))
+    return out
+
+
+def show(model, tok, q, do_run, array, scalars, expect=None, langs=()):
     kind, body = answer(model, tok, q)
     print()
     if kind == 'text':
-        print(body[0] if body else '(no answer)')
+        line = body[0] if body else ''
+        print(line or '(no answer)')
+        if langs and line:
+            tr = translate(line, langs)
+            if tr is None:
+                print('\n   not an s-expression, so there is no IR to compile')
+            else:
+                for name, src in tr:
+                    print(f'\n--- {name} ---')
+                    print(src.rstrip())
         return
     for l in body:
         print(('' if l.endswith(':') else '    ') + l)
+    if langs:
+        print('\n   this checkpoint emits assembly, not IR, so there is nothing to '
+              'translate.\n   use an s-expression checkpoint: '
+              '--ckpt checkpoints/sexpr_v2.pth --lang c,java,python')
     if do_run:
         val, err = run_code(body, array, scalars)
         print()
@@ -153,6 +192,10 @@ def main():
     ap.add_argument('--run', action='store_true', help='assemble and execute the answer')
     ap.add_argument('--array', default=None, help='comma-separated input array')
     ap.add_argument('--args', default=None, help='comma-separated scalar inputs')
+    ap.add_argument('--lang', default='',
+                    help='comma-separated target languages to compile the IR to '
+                         '(c, java, python, javascript, or all). Needs a '
+                         'checkpoint trained with --target sexpr.')
     ap.add_argument('--expect', type=int, default=None,
                     help='what you believe the answer is; prints PASS/FAIL')
     a = ap.parse_args()
@@ -162,8 +205,13 @@ def main():
     arr = [int(x) for x in a.array.split(',')] if a.array else None
     sca = tuple(int(x) for x in a.args.split(',')) if a.args else ()
 
+    from backends import TARGETS
+    langs = ([] if not a.lang else
+             sorted(TARGETS) if a.lang == 'all' else
+             [x.strip() for x in a.lang.split(',') if x.strip()])
+
     if a.question:
-        show(model, tok, ' '.join(a.question), a.run, arr, sca, a.expect)
+        show(model, tok, ' '.join(a.question), a.run, arr, sca, a.expect, langs)
         return 0
 
     print(f'{a.ckpt} loaded. Ask a question, or Ctrl-D to quit.')
@@ -177,7 +225,7 @@ def main():
         if not q:
             continue
         do_run = q.startswith('!')
-        show(model, tok, q.lstrip('!').strip(), do_run, arr, sca, a.expect)
+        show(model, tok, q.lstrip('!').strip(), do_run, arr, sca, a.expect, langs)
         print()
 
 
