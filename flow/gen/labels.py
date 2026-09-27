@@ -32,7 +32,7 @@ import re
 from flow.check.dataflow import check_dataflow
 from flow.check.diagnostics import Report
 from flow.check.typing import type_of
-from flow.gen.english import say
+from flow.gen.english import cond_context, say
 from flow.gen.order import canonical_order
 from flow.gen.render import Namer
 from flow.ir2 import graph as g
@@ -251,7 +251,8 @@ def m2_examples(flow, text, spans, style):
             # down-weight these or the logic model mostly learns to copy.
             'trivial': isinstance(e, (Ref, Const, Str, Bool)),
             'anon': {
-                'intent': say(e, style, AnonNamer(scope, anon)),
+                'intent': say(e, style, AnonNamer(scope, anon),
+                              cond=cond_context(field, type_of(e, scope))),
                 'scope': anon.scope(scope),
                 'target': anon.target(e),
                 'mapping': anon.mapping(),

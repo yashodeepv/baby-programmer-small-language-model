@@ -27,7 +27,7 @@ from contextlib import contextmanager
 from flow.check.dataflow import check_dataflow
 from flow.check.diagnostics import Report
 from flow.check.typing import type_of
-from flow.gen.english import say, words
+from flow.gen.english import cond_context, say, words
 from flow.gen.order import canonical_order
 from flow.ir2 import graph as g
 from flow.ir2.expr import Str
@@ -189,8 +189,9 @@ class _Render:
         return Namer(scope, self.noun, self.flow)
 
     def expr(self, step, field, e, namer):
+        cond = cond_context(field, type_of(e, namer.scope))
         with self.w.mark(step.id, f'expr:{field}'):
-            self.w.add(say(e, self.style, namer))
+            self.w.add(say(e, self.style, namer, cond=cond))
 
     def template(self, tmpl, fill):
         """Write `tmpl`, calling fill[name]() at each {name}, plain text between."""

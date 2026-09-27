@@ -44,6 +44,7 @@ code generation yet.
 | `gen/english.py` | expressions → English, reusing arm's wordings |
 | `gen/render.py` | flow → English request, recording which words came from which step |
 | `gen/labels.py` | flow-encoder labels; logic-model examples, anonymised |
+| `gen/curriculum.py` | the book: seven chapters, one new idea each |
 | `gen/build.py` | builds the corpus: sample → check → cover → render → label |
 | `examples/` | hand-written flows, each with scenarios |
 | `tests/` | unit tests |
@@ -58,6 +59,34 @@ python3.11 -m flow run   flow/examples/order_checkout.json --all
 
 python3.11 -m unittest discover -s flow/tests -t .
 ```
+
+## The book
+
+baby-programmer's premise is that a programmer isn't made by web-scale
+compute. A person learns from one class, one good book, and then the job.
+The arm corpus is the class (control flow, conditions, loops). The IR2
+corpus is the book: seven chapters, each adding one idea on top of the
+earlier ones. Every flow in a chapter must use that chapter's idea, and flows
+grow longer and expressions deeper as the book goes on.
+
+```bash
+python3.11 -m flow.gen.curriculum                                   # contents, one sample per chapter
+python3.11 -m flow.gen.build --curriculum 800 --out data/flow_book.jsonl
+```
+
+| # | Chapter | New idea | Steps (median) | Words (median) |
+|---|---|---|---:|---:|
+| 1 | Hello, flow | a trigger, one action, an end; plain fields only | 3 | 29 |
+| 2 | Working things out | compute steps name new values | 4 | 33 |
+| 3 | Rules and rejections | validate; stop with an error or fail the flow | 5 | 59 |
+| 4 | Talking to other systems | call a service, retry, handle failure | 5 | 64 |
+| 5 | Decisions | branch: one path, the other, or a way out | 7 | 94 |
+| 6 | Doing things at once | parallel branches and a join | 11 | 133 |
+| 7 | Putting it together | everything, with deeper expressions | 11 | 144 |
+
+Measured on 400 flows per chapter. Each exercise has a checked answer key:
+the flow passes the verifier and has been run until every edge was taken.
+The mock exams are the held-out splits, per chapter.
 
 ## Training data
 

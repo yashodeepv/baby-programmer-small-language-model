@@ -19,6 +19,7 @@ from the same walk, so the two texts can never drift apart.
 """
 
 from flow.arm_bridge import arm_ir
+from flow.ir2.types import BOOL
 from flow.ir2.expr import (All, Any, Arr, ArrLoop, Bin, Bool, Cmp, Const, Fmt,
                            Index, Len, Loop, Not, Pluck, Ref, Sel, Str, Un)
 
@@ -59,17 +60,29 @@ def _mods(node, style, namer):
     return pre, filt, tail
 
 
-def say(node, style, namer):
-    """An expression as English, in one of three styles."""
-    S = lambda n: say(n, style, namer)
+def cond_context(field, typ):
+    """Is this expression read as a condition? Then a bare boolean field is
+    said as "the flagged is true"; where it is a value being passed on or
+    returned, it is just "the flagged"."""
+    return field in ('rule', 'cond') or (field.startswith('assign.') and typ == BOOL)
 
-    def operand(n):
-        text = S(n)
+
+def say(node, style, namer, cond=False):
+    """An expression as English, in one of three styles.
+
+    `cond` marks a position where a condition is expected: a rule, a branch,
+    the test of a `sel`, the operands of not / all / any.
+    """
+    S = lambda n: say(n, style, namer)
+    C = lambda n: say(n, style, namer, cond=True)
+
+    def operand(n, c=False):
+        text = say(n, style, namer, cond=c)
         return f'({text})' if isinstance(n, (Bin, Cmp, Sel, All, Any)) else text
 
     if isinstance(node, Ref):
         phrase = namer.ref(node.path)
-        return _BOOLREF[style % 3].format(x=phrase) if namer.is_bool(node.path) else phrase
+        return _BOOLREF[style % 3].format(x=phrase) if cond and namer.is_bool(node.path) else phrase
     if isinstance(node, Const):
         return namer.num(node.v)
     if isinstance(node, Str):
@@ -83,11 +96,11 @@ def say(node, style, namer):
     if isinstance(node, Cmp):
         return f'{S(node.a)} is {_w(arm_ir._CMPWORD, node.op, style)} {S(node.b)}'
     if isinstance(node, Sel):
-        return _SEL[style % 3].format(a=operand(node.a), c=S(node.c), b=operand(node.b))
+        return _SEL[style % 3].format(a=operand(node.a), c=C(node.c), b=operand(node.b))
     if isinstance(node, Not):
-        return _NOT[style % 3].format(x=S(node.a))
+        return _NOT[style % 3].format(x=C(node.a))
     if isinstance(node, (All, Any)):
-        parts = [operand(x) for x in node.items]
+        parts = [operand(x, c=True) for x in node.items]
         if len(parts) == 2:
             tmpl = (_ALL if isinstance(node, All) else _ANY)[style % 3]
             return tmpl.format(a=parts[0], b=parts[1])

@@ -164,6 +164,54 @@ class Labels(unittest.TestCase):
                             self.assertNotIn(name, a['scope'])
 
 
+class Curriculum(unittest.TestCase):
+    def test_each_chapter_teaches_its_idea_and_only_what_came_before(self):
+        from flow.gen.curriculum import CHAPTERS, chapter_flows
+        from flow.ir2.expr import ArrLoop, children
+
+        def nodes(e):
+            out, stack = [], [e]
+            while stack:
+                n = stack.pop()
+                out.append(n)
+                stack.extend(children(n))
+            return out
+
+        for ch in CHAPTERS:
+            for f, meta in chapter_flows(ch, 40, CATS, seed=5):
+                with self.subTest(chapter=ch.number, flow=f.name):
+                    self.assertTrue(check(f).ok)
+                    self.assertEqual(meta['chapter'], ch.number)
+                    self.assertTrue(set(meta['patterns']) <= set(ch.patterns))
+                    if ch.require:
+                        self.assertIn(ch.require, meta['patterns'])
+                    if ch.depth == 0:
+                        exprs = [e for s in f.steps for e in _step_exprs(s)]
+                        self.assertFalse(any(isinstance(n, ArrLoop) for e in exprs for n in nodes(e)),
+                                         'a level-0 chapter must not reduce over lists')
+
+    def test_bool_fields_say_is_true_only_in_conditions(self):
+        for f, meta in flows(120, seed=12):
+            text, spans = render(f, 0, meta['noun'])
+            for sp in spans:
+                role = sp['role']
+                if role.startswith('expr:response.') or role.startswith('expr:data.') \
+                        or role.startswith('expr:args.'):
+                    self.assertNotIn(' is true', text[sp['start']:sp['end']])
+
+
+def _step_exprs(s):
+    if isinstance(s, g.Compute):
+        return [e for _, e in s.assign]
+    out = []
+    for attr in ('rule', 'cond', 'to', 'message'):
+        if hasattr(s, attr):
+            out.append(getattr(s, attr))
+    for attr in ('args', 'data', 'response'):
+        out.extend((getattr(s, attr, None) or {}).values())
+    return out
+
+
 class Build(unittest.TestCase):
     def test_records_are_json_and_deterministic(self):
         def build(seed):

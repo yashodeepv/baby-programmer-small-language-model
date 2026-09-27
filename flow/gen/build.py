@@ -1,6 +1,11 @@
 """build.py - Generate, verify and write a flow corpus.
 
     python3.11 -m flow.gen.build --n 5000 --seed 0 --out data/flow_corpus.jsonl
+    python3.11 -m flow.gen.build --curriculum 800 --out data/flow_book.jsonl
+
+--curriculum N samples N flows per chapter of the book (curriculum.py), in
+chapter order, each record tagged with its chapter. Without it, flows are
+sampled freely from every pattern.
 
 Per flow: sample -> check -> invent scenarios until every edge is taken ->
 render in one style -> derive labels. A flow that the coverage search cannot
@@ -8,7 +13,7 @@ fully exercise is dropped, and the reason counted.
 
 One JSON object per line:
 
-    id, catalog, patterns, n_steps, style, split
+    id, catalog, patterns, n_steps, style, split, chapter (0 = not from the book)
     flow        the IR2 JSON, each step's `intent` set to its clause
     scenarios   inputs, mocks and expected outcomes -- the test suite
     m1          flow-encoder example (labels.py)
@@ -31,6 +36,7 @@ import sys
 
 from flow.gen.catalog import all_catalogs
 from flow.gen.coverage import synthesize
+from flow.gen.curriculum import book
 from flow.gen.labels import m1_example, m2_examples
 from flow.gen.render import HELD_OUT_STYLE, N_STYLES, render
 from flow.gen.sampler import sample_flows
@@ -72,6 +78,7 @@ def build_one(rng, flow, meta, cat, hold_out_catalog, state_p=0.75):
         'id': flow.name,
         'catalog': meta['catalog'],
         'patterns': meta['patterns'],
+        'chapter': meta.get('chapter', 0),
         'n_steps': meta['n_steps'],
         'style': style,
         'split': split,
@@ -89,6 +96,8 @@ def main(argv=None):
     ap.add_argument('--out', default='data/flow_corpus.jsonl')
     ap.add_argument('--hold-out-catalog', default='logistics')
     ap.add_argument('--max-steps', type=int, default=16)
+    ap.add_argument('--curriculum', type=int, metavar='N',
+                    help='sample N flows per chapter of the book instead of --n free flows')
     a = ap.parse_args(argv)
 
     cats = all_catalogs()
@@ -99,7 +108,9 @@ def main(argv=None):
     n_m2 = 0
     os.makedirs(os.path.dirname(a.out) or '.', exist_ok=True)
     with open(a.out, 'w') as out:
-        for flow, meta in sample_flows(a.n, cats, seed=a.seed, max_steps=a.max_steps):
+        source = (book(a.curriculum, cats, seed=a.seed, max_steps=a.max_steps) if a.curriculum
+                  else sample_flows(a.n, cats, seed=a.seed, max_steps=a.max_steps))
+        for flow, meta in source:
             rec, why = build_one(rng, flow, meta, cats[meta['catalog']], a.hold_out_catalog)
             if rec is None:
                 dropped[why] += 1

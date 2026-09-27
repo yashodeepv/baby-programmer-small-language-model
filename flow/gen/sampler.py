@@ -55,10 +55,11 @@ class SampleError(Exception):
 
 
 class _Builder:
-    def __init__(self, rng, cat, trig, mode):
+    def __init__(self, rng, cat, trig, mode, allowed=tuple(PATTERNS), depth=1):
         self.rng, self.cat, self.mode = rng, cat, mode
+        self.allowed, self.depth = set(allowed), depth
         self.envs = [{'input': random_value(rng, trig.payload, cat)} for _ in range(N_ENVS)]
-        self.gen = ExprGen(rng, cat, self.envs)
+        self.gen = ExprGen(rng, cat, self.envs, level=depth)
         self.trig = trig
         self.steps, self.edges, self.pending = [], [], []
         self.scope = {'input': trig.payload}
@@ -111,14 +112,14 @@ class _Builder:
         else:
             to = Str(self.rng.choice(self.cat.recipients[channel]))
         return g.Notify(id=self.new_id('notify'), channel=channel, to=to,
-                        message=self.gen.str_(self.scope, 1))
+                        message=self.gen.message(self.scope))
 
     def persist_step(self):
         entity = self.rng.choice(sorted(self.cat.entities))
         rec = self.cat.entities[entity]
         op = self.rng.choices(['create', 'update', 'delete'], [15, 4, 1])[0]
         fields = rec.fields[:1] if op == 'delete' else rec.fields
-        data = {n: self.gen.expr(self.scope, t, field=n) for n, t in fields}
+        data = {n: self.gen.expr(self.scope, t, field=n, depth=self.depth) for n, t in fields}
         return g.Persist(id=self.new_id('save'), entity=entity, op=op, data=data)
 
     def call_step(self, allow_list_args=True):
@@ -127,7 +128,7 @@ class _Builder:
         self.rng.shuffle(ops)
         ops.sort(key=lambda x: (x[0], x[1]) in self.used_ops)      # unused first, stable
         for service, op, sig in ops:
-            args = {n: self.gen.expr(self.scope, t, field=n) for n, t in sig.input.fields}
+            args = {n: self.gen.expr(self.scope, t, field=n, depth=self.depth) for n, t in sig.input.fields}
             if any(v is None for v in args.values()):
                 continue
             sid = op if op not in self.counts else self.new_id(op)
@@ -139,7 +140,7 @@ class _Builder:
 
     # -- patterns ---------------------------------------------------------
     def p_validate(self):
-        v = self.add(g.Validate(id=self.new_id('check'), rule=self.gen.bool_(self.scope, 1),
+        v = self.add(g.Validate(id=self.new_id('check'), rule=self.gen.bool_(self.scope, self.depth),
                                 message=self.rng.choice(MESSAGES)))
         if self.rng.random() < 0.7:
             self.side(self.error_end(v.message), v.id, 'error')
@@ -154,7 +155,11 @@ class _Builder:
         for _ in range(self.rng.choices([1, 2, 3], [4, 3, 1])[0]):
             t = self.rng.choices([INT, BOOL, STR], [6, 3, 1])[0]
             name = self.fresh_name(t)
-            e = self.gen.expr(inner, t, depth=1)
+            e = self.gen.expr(inner, t, depth=self.depth)
+            for _ in range(4):              # two names for one value teach nothing
+                if all(e != prev for _, prev in assign):
+                    break
+                e = self.gen.expr(inner, t, depth=self.depth)
             for env in self.envs:
                 env[sid][name] = evaluate(e, env)
             assign.append((name, e))
@@ -189,7 +194,7 @@ class _Builder:
         return None
 
     def p_branch(self):
-        b = self.add(g.Branch(id=self.new_id('if'), cond=self.gen.bool_(self.scope, 1)))
+        b = self.add(g.Branch(id=self.new_id('if'), cond=self.gen.bool_(self.scope, self.depth)))
         t = self.side(self.arm(['notify', 'persist', 'stop', 'fail'], [4, 3, 1, 1]), b.id, 'true')
         pending = [] if isinstance(t, g.End) else [(t.id, 'next')]
         f = self.arm(['none', 'notify', 'persist'], [5, 2, 1])
@@ -206,7 +211,8 @@ class _Builder:
         p.join = join.id
         outputs = {}
         for _ in range(self.rng.choices([2, 3], [3, 1])[0]):
-            kind = self.rng.choices(['notify', 'persist', 'call'], [3, 3, 1])[0]
+            kind = self.rng.choices(['notify', 'persist', 'call'],
+                                    [3, 3, 1 if 'call' in self.allowed else 0])[0]
             s = None
             if kind == 'call':
                 s, sig = self.call_step()
@@ -244,21 +250,42 @@ class _Builder:
         self.add(g.End(id=self.new_id('done'), status='ok', response=resp))
 
 
-def sample_flow(rng, cat, n_patterns=None, max_steps=16, name='flow'):
-    """One flow from `cat`. Returns (flow, meta)."""
+def sample_flow(rng, cat, n_patterns=None, max_steps=16, name='flow',
+                patterns=None, require=None, depth=1):
+    """One flow from `cat`. Returns (flow, meta).
+
+    n_patterns  how many patterns to chain: an int, a (lo, hi) range, or
+                None for 2-6
+    patterns    the patterns allowed (default: all)
+    require     a pattern that must appear at least once -- a chapter's
+                new idea
+    depth       expression nesting depth
+    """
+    allowed = list(patterns or PATTERNS)
+    weights = [PATTERNS[k] for k in allowed]
     for _ in range(50):
         trig_spec = rng.choice(cat.triggers)
         mode = ('sync' if rng.random() < 0.7 else 'async') if trig_spec.source == 'http' else 'async'
-        b = _Builder(rng, cat, trig_spec, mode)
+        b = _Builder(rng, cat, trig_spec, mode, allowed, depth)
         trig = b.add(g.Trigger(id='start', source=trig_spec.source,
                                config=dict(trig_spec.config), payload=trig_spec.payload))
         b.pending = [(trig.id, 'next')]
-        want = n_patterns if n_patterns is not None else rng.randint(2, 6)
-        while len(b.patterns) < want:
-            kind = rng.choices(list(PATTERNS), list(PATTERNS.values()))[0]
+        if n_patterns is None:
+            want = rng.randint(2, 6)
+        elif isinstance(n_patterns, tuple):
+            want = rng.randint(*n_patterns)
+        else:
+            want = n_patterns
+        forced = rng.randrange(want) if require else -1
+        tries = 0
+        while len(b.patterns) < want and tries < 100:
+            tries += 1
+            kind = require if len(b.patterns) == forced else rng.choices(allowed, weights)[0]
             if getattr(b, f'p_{kind}')() is False:
                 continue
             b.patterns.append(kind)
+        if len(b.patterns) < want:
+            continue
         b.finish()
         if len(b.steps) > max_steps:
             continue

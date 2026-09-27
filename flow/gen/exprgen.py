@@ -78,10 +78,13 @@ class ExprGen:
     the sampler. Thresholds are placed inside the range an expression actually
     takes over them, so both sides of a comparison happen in practice."""
 
-    def __init__(self, rng, catalog, envs=None):
+    def __init__(self, rng, catalog, envs=None, level=1):
         self.rng = rng
         self.cat = catalog
         self.envs = envs if envs is not None else []
+        # 0: plain fields and constants only -- no reductions over lists,
+        # no filters. The first chapters of the book stay first-chapter simple.
+        self.level = level
 
     def pick(self, options):
         """options: [(weight, thunk)] with thunk possibly None (unavailable)."""
@@ -120,6 +123,8 @@ class ExprGen:
 
     # ------------------------------------------------------------------ int
     def reduction(self, scope):
+        if self.level < 1:
+            return None
         lists = [(p, rec, n) for p, rec in record_lists(scope)
                  for n, ft in rec.fields if ft == INT]
         if not lists:
@@ -249,15 +254,53 @@ class ExprGen:
                 parts.append(Ref(self.rng.choice(vals)))
             return Fmt(tuple(parts))
 
-        # A slot with a value pool (status, tier) takes one of its values; any
-        # other string field would type-check but read as nonsense.
-        pool = [v for v in self.cat.strings.get(field, []) if v] if field else []
+        if field is None:
+            # A free-standing string (a computed label): a field, a literal,
+            # or text composed from values.
+            return self.pick([
+                (3, (lambda: Ref(self.rng.choice(strs))) if strs else None),
+                (2 if depth > 0 and strs else 0, fmt),
+                (0.5, lambda: Str(self.rng.choice(['n/a', 'manual']))),
+            ])
+        # Filling a named slot (a call argument, a saved field). Anything
+        # type-correct would pass the checker, but `status = the invoice id`
+        # reads as nonsense, so:
+        #   same name in scope     -> that field
+        #   the slot has a pool    -> one of its values (status, tier, region)
+        #   same kind of name      -> a field sharing its last word (_id, email, date)
+        #   otherwise              -> any string field, or a placeholder literal
+        if named:
+            return Ref(self.rng.choice(named))
+        pool = [v for v in self.cat.strings.get(field, []) if v]
+        if pool:
+            return Str(self.rng.choice(pool))
+        kin = [p for p in strs if p[-1].split('_')[-1] == field.split('_')[-1]]
+        if kin:
+            return Ref(self.rng.choice(kin))
         return self.pick([
-            (8 if named else 0, (lambda: Ref(self.rng.choice(named))) if named else None),
-            (1 if pool else 3, (lambda: Ref(self.rng.choice(strs))) if strs else None),
-            (2 if depth > 0 and strs and not pool else 0, fmt),
-            (6 if pool else 0.5, lambda: Str(self.rng.choice(pool or ['n/a', 'manual']))),
+            (3, (lambda: Ref(self.rng.choice(strs))) if strs else None),
+            (1, lambda: Str(self.rng.choice(['n/a', 'manual']))),
         ])
+
+    def message(self, scope):
+        """A notification's text: a lead-in, what it is about, and one value.
+
+        "Update on " + order_id + ": " + status -- never an email address or a
+        random string field on its own, which reads as nonsense.
+        """
+        strs = [p for p in refs_of(scope, STR) if not p[-1].endswith('email')]
+        ids = [p for p in strs if p[-1].endswith('_id') or p[-1] in ('name', 'customer')]
+        vals = refs_of(scope, INT) + [p for p in strs if p[-1] in self.cat.strings]
+        parts = [Str(self.rng.choice(['Update on ', 'New ', 'Alert for ', 'Done: ', 'Reminder: ']))]
+        about = ids or strs
+        if about:
+            parts.append(Ref(self.rng.choice(about)))
+        else:
+            parts[0] = Str(parts[0].v + 'your request')
+        if vals and self.rng.random() < 0.7:
+            parts.append(Str(self.rng.choice([': ', ' - ', ', now '])))
+            parts.append(Ref(self.rng.choice(vals)))
+        return Fmt(tuple(parts)) if len(parts) > 1 else parts[0]
 
     # ------------------------------------------------------------ dispatch
     def expr(self, scope, t, field=None, depth=1):
