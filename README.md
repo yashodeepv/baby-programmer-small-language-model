@@ -374,3 +374,4 @@ About 100 minutes on an Apple M-series GPU.
 | `arm/verify_backends.py` | run every backend against the oracle |
 | `arm/ask.py` | ask the model questions by hand |
 | `model.py` | the transformer |
+| `flow/` | **IR2 (in progress):** flowchart orchestration built on this IR — see [`flow/README.md`](flow/README.md) |

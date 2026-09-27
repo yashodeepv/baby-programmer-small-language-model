@@ -1,0 +1,109 @@
+{
+  "name": "overdue_reminders",
+  "title": "Overdue invoice reminders",
+  "intent": "Every morning at 6, fetch overdue invoices from billing, retrying twice. If there are any, email finance a summary with the count, how many are more than 30 days late, the amount owed and the worst delay; if any are more than 30 days late also post to #collections. Log the run.",
+  "mode": "async",
+  "services": {
+    "billing": {
+      "list_overdue": {
+        "input": {"as_of": "str"},
+        "output": {"invoices": ["list", {"invoice_id": "str", "customer": "str",
+                                         "amount": "int", "days_late": "int"}]}
+      }
+    }
+  },
+  "entities": {
+    "run_log": {"run_date": "str", "overdue": "int", "owed": "int"}
+  },
+  "steps": [
+    {"id": "nightly", "kind": "trigger", "title": "Every day at 06:00",
+     "source": "schedule", "config": {"cron": "0 6 * * *"},
+     "payload": {"run_date": "str"}},
+
+    {"id": "fetch", "kind": "call", "title": "Fetch overdue invoices",
+     "service": "billing", "op": "list_overdue", "retries": 2,
+     "args": {"as_of": "input.run_date"}},
+
+    {"id": "summarize", "kind": "compute", "title": "Summarize",
+     "intent": "how many are overdue, how many over 30 days, total owed, worst delay",
+     "assign": {
+       "count": "(count fetch.invoices)",
+       "seriously_late": "(count (pluck fetch.invoices days_late) :gt 30)",
+       "owed": "(sum (pluck fetch.invoices amount))",
+       "worst": "(max (pluck fetch.invoices days_late))"
+     }},
+
+    {"id": "any_overdue", "kind": "branch", "title": "Anything overdue?",
+     "cond": "(gt summarize.count 0)"},
+
+    {"id": "quiet", "kind": "end", "title": "Nothing overdue", "status": "ok"},
+
+    {"id": "tell_finance", "kind": "notify", "title": "Email finance",
+     "channel": "email", "to": "\"finance@example.com\"",
+     "message": "(fmt summarize.count \" overdue invoices, \" summarize.seriously_late \" over 30 days late, \" summarize.owed \" cents owed. Worst: \" summarize.worst \" days.\")"},
+
+    {"id": "escalate", "kind": "branch", "title": "Over 30 days late?",
+     "cond": "(gt summarize.seriously_late 0)"},
+
+    {"id": "page_collections", "kind": "notify", "title": "Post to #collections",
+     "channel": "slack", "to": "\"#collections\"",
+     "message": "(fmt summarize.seriously_late \" invoices are more than 30 days late\")"},
+
+    {"id": "log_run", "kind": "persist", "title": "Log the run",
+     "entity": "run_log", "op": "create",
+     "data": {"run_date": "input.run_date", "overdue": "summarize.count", "owed": "summarize.owed"}},
+
+    {"id": "finished", "kind": "end", "title": "Done", "status": "ok"}
+  ],
+  "edges": [
+    {"from": "nightly", "to": "fetch"},
+    {"from": "fetch", "to": "summarize"},
+    {"from": "summarize", "to": "any_overdue"},
+    {"from": "any_overdue", "to": "tell_finance", "on": "true"},
+    {"from": "any_overdue", "to": "quiet", "on": "false"},
+    {"from": "tell_finance", "to": "escalate"},
+    {"from": "escalate", "to": "page_collections", "on": "true"},
+    {"from": "escalate", "to": "log_run", "on": "false"},
+    {"from": "page_collections", "to": "log_run"},
+    {"from": "log_run", "to": "finished"}
+  ],
+  "scenarios": {
+    "none_overdue": {
+      "input": {"run_date": "2026-09-26"},
+      "mocks": {"fetch": {"ok": {"invoices": []}}},
+      "expect": {
+        "status": "ok",
+        "path": ["nightly", "fetch", "summarize", "any_overdue", "quiet"],
+        "effects": ["call billing.list_overdue #1"]
+      }
+    },
+    "some_overdue": {
+      "input": {"run_date": "2026-09-26"},
+      "mocks": {"fetch": {"ok": {"invoices": [
+        {"invoice_id": "I-1", "customer": "acme", "amount": 12000, "days_late": 45},
+        {"invoice_id": "I-2", "customer": "globex", "amount": 3000, "days_late": 10},
+        {"invoice_id": "I-3", "customer": "initech", "amount": 5000, "days_late": 31}
+      ]}}},
+      "expect": {
+        "status": "ok",
+        "path": ["nightly", "fetch", "summarize", "any_overdue", "tell_finance", "escalate",
+                 "page_collections", "log_run", "finished"],
+        "effects": ["call billing.list_overdue #1",
+                    "notify email finance@example.com: 3 overdue invoices, 2 over 30 days late, 20000 cents owed. Worst: 45 days.",
+                    "notify slack #collections: 2 invoices are more than 30 days late",
+                    "persist run_log.create"]
+      }
+    },
+    "billing_down": {
+      "input": {"run_date": "2026-09-26"},
+      "mocks": {"fetch": {"error": "503 service unavailable"}},
+      "expect": {
+        "status": "error",
+        "error": "fetch: billing.list_overdue failed: 503 service unavailable",
+        "path": ["nightly", "fetch"],
+        "effects": ["call billing.list_overdue #1", "call billing.list_overdue #2",
+                    "call billing.list_overdue #3"]
+      }
+    }
+  }
+}

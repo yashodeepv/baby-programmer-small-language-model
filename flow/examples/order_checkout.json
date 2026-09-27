@@ -1,0 +1,150 @@
+{
+  "name": "order_checkout",
+  "title": "Order checkout",
+  "intent": "When an order is posted, reject it if it has no items. Total the items, give gold customers 10% off, and charge the card, retrying once. If the charge fails, return an error. Alert sales on Slack for orders of $1000 or more. Then email the customer a confirmation and save the order at the same time, and return the order id, charge id and total.",
+  "mode": "sync",
+  "services": {
+    "payments": {
+      "charge": {
+        "input": {"order_id": "str", "amount": "int"},
+        "output": {"charge_id": "str", "status": "str"}
+      }
+    }
+  },
+  "entities": {
+    "order": {"order_id": "str", "total": "int", "charge_id": "str"}
+  },
+  "steps": [
+    {"id": "start", "kind": "trigger", "title": "Order posted",
+     "source": "http", "config": {"method": "POST", "path": "/orders"},
+     "payload": {
+       "order_id": "str", "customer_email": "str", "tier": "str",
+       "items": ["list", {"sku": "str", "amount": "int"}]
+     }},
+
+    {"id": "has_items", "kind": "validate", "title": "Has items?",
+     "intent": "the order has at least one item",
+     "rule": "(gt (len input.items) 0)", "message": "Order has no items"},
+
+    {"id": "reject", "kind": "end", "title": "Rejected: no items", "status": "error",
+     "response": {"reason": "\"order has no items\""}},
+
+    {"id": "pricing", "kind": "compute", "title": "Price the order",
+     "intent": "add up the item amounts; gold customers get 10% off",
+     "assign": {
+       "subtotal": "(sum (pluck input.items amount))",
+       "discount": "(sel (eq input.tier \"gold\") (div pricing.subtotal 10) 0)",
+       "total": "(sub pricing.subtotal pricing.discount)"
+     }},
+
+    {"id": "charge", "kind": "call", "title": "Charge the card",
+     "service": "payments", "op": "charge", "retries": 1,
+     "args": {"order_id": "input.order_id", "amount": "pricing.total"}},
+
+    {"id": "payment_failed", "kind": "end", "title": "Payment failed", "status": "error",
+     "response": {"reason": "\"payment failed\"", "order_id": "input.order_id"}},
+
+    {"id": "big_order", "kind": "branch", "title": "$1000 or more?",
+     "intent": "the total is at least 100000 cents",
+     "cond": "(ge pricing.total 100000)"},
+
+    {"id": "alert_sales", "kind": "notify", "title": "Tell sales",
+     "channel": "slack", "to": "\"#sales\"",
+     "message": "(fmt \"Large order \" input.order_id \": \" pricing.total \" cents\")"},
+
+    {"id": "fulfil", "kind": "parallel", "title": "Confirm and save", "join": "done"},
+
+    {"id": "confirm_email", "kind": "notify", "title": "Email the customer",
+     "channel": "email", "to": "input.customer_email",
+     "message": "(fmt \"Order \" input.order_id \" confirmed. Total: \" pricing.total)"},
+
+    {"id": "save_order", "kind": "persist", "title": "Save the order",
+     "entity": "order", "op": "create",
+     "data": {"order_id": "input.order_id", "total": "pricing.total", "charge_id": "charge.charge_id"}},
+
+    {"id": "done", "kind": "join", "title": "Both done"},
+
+    {"id": "reply", "kind": "end", "title": "Order placed", "status": "ok",
+     "response": {"order_id": "input.order_id", "charge_id": "charge.charge_id", "total": "pricing.total"}}
+  ],
+  "edges": [
+    {"from": "start", "to": "has_items"},
+    {"from": "has_items", "to": "pricing"},
+    {"from": "has_items", "to": "reject", "on": "error"},
+    {"from": "pricing", "to": "charge"},
+    {"from": "charge", "to": "big_order"},
+    {"from": "charge", "to": "payment_failed", "on": "error"},
+    {"from": "big_order", "to": "alert_sales", "on": "true"},
+    {"from": "big_order", "to": "fulfil", "on": "false"},
+    {"from": "alert_sales", "to": "fulfil"},
+    {"from": "fulfil", "to": "confirm_email", "on": "branch"},
+    {"from": "fulfil", "to": "save_order", "on": "branch"},
+    {"from": "confirm_email", "to": "done"},
+    {"from": "save_order", "to": "done"},
+    {"from": "done", "to": "reply"}
+  ],
+  "scenarios": {
+    "happy": {
+      "input": {"order_id": "A-100", "customer_email": "ann@example.com", "tier": "standard",
+                "items": [{"sku": "A1", "amount": 2500}, {"sku": "B2", "amount": 4000}]},
+      "mocks": {"charge": {"ok": {"charge_id": "ch_1", "status": "paid"}}},
+      "expect": {
+        "status": "ok",
+        "response": {"order_id": "A-100", "charge_id": "ch_1", "total": 6500},
+        "path": ["start", "has_items", "pricing", "charge", "big_order", "fulfil",
+                 "confirm_email", "save_order", "done", "reply"],
+        "effects": ["call payments.charge #1",
+                    "notify email ann@example.com: Order A-100 confirmed. Total: 6500",
+                    "persist order.create"]
+      }
+    },
+    "gold_large": {
+      "input": {"order_id": "B-7", "customer_email": "bo@example.com", "tier": "gold",
+                "items": [{"sku": "TV", "amount": 150000}]},
+      "mocks": {"charge": {"ok": {"charge_id": "ch_2", "status": "paid"}}},
+      "expect": {
+        "status": "ok",
+        "response": {"order_id": "B-7", "charge_id": "ch_2", "total": 135000},
+        "path": ["start", "has_items", "pricing", "charge", "big_order", "alert_sales", "fulfil",
+                 "confirm_email", "save_order", "done", "reply"],
+        "effects": ["call payments.charge #1",
+                    "notify slack #sales: Large order B-7: 135000 cents",
+                    "notify email bo@example.com: Order B-7 confirmed. Total: 135000",
+                    "persist order.create"]
+      }
+    },
+    "retry_then_paid": {
+      "input": {"order_id": "C-3", "customer_email": "cy@example.com", "tier": "standard",
+                "items": [{"sku": "A1", "amount": 999}]},
+      "mocks": {"charge": [{"error": "timeout"}, {"ok": {"charge_id": "ch_3", "status": "paid"}}]},
+      "expect": {
+        "status": "ok",
+        "response": {"order_id": "C-3", "charge_id": "ch_3", "total": 999},
+        "effects": ["call payments.charge #1", "call payments.charge #2",
+                    "notify email cy@example.com: Order C-3 confirmed. Total: 999",
+                    "persist order.create"]
+      }
+    },
+    "declined": {
+      "input": {"order_id": "D-4", "customer_email": "di@example.com", "tier": "gold",
+                "items": [{"sku": "A1", "amount": 500}]},
+      "mocks": {"charge": {"error": "card declined"}},
+      "expect": {
+        "status": "error",
+        "response": {"reason": "payment failed", "order_id": "D-4"},
+        "path": ["start", "has_items", "pricing", "charge", "payment_failed"],
+        "effects": ["call payments.charge #1", "call payments.charge #2"]
+      }
+    },
+    "no_items": {
+      "input": {"order_id": "E-5", "customer_email": "ed@example.com", "tier": "standard",
+                "items": []},
+      "expect": {
+        "status": "error",
+        "response": {"reason": "order has no items"},
+        "path": ["start", "has_items", "reject"],
+        "effects": []
+      }
+    }
+  }
+}
