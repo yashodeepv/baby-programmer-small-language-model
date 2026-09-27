@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec Studio</title>
+<style>
+:root {
+  --paper: #f2f4f7; --surface: #ffffff; --sunk: #f7f8fa; --ink: #16202a; --muted: #5b6875; --line: #d7dde4;
+  --dot: #d2d8df; --accent: #2b4bc9; --accent-soft: #e4e9fb; --hl: #fff0bf;
+  --ok: #23804f; --ok-soft: #e3f3ea; --err: #c1352f; --err-soft: #fbe7e6; --warn: #a2650f; --warn-soft: #fbf0dc;
+  --trigger: #4c5bd4; --call: #2f7fc1; --compute: #7a4fc4; --validate: #a2650f; --branch: #c2571a;
+  --flowk: #5b6875; --persist: #23804f; --notify: #0e7f86;
+  --tint: 8%;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #0f141a; --surface: #161d25; --sunk: #121920; --ink: #e5eaf0; --muted: #93a1ae; --line: #2a3440;
+    --dot: #232d37; --accent: #8ea4ff; --accent-soft: #1e2949; --hl: #4a3f14;
+    --ok: #5fbf8a; --ok-soft: #173326; --err: #f07171; --err-soft: #3a1c1c; --warn: #d9a441; --warn-soft: #3a2e14;
+    --trigger: #8b96f0; --call: #6aaee6; --compute: #b192ec; --validate: #d9a441; --branch: #ec8a52;
+    --flowk: #93a1ae; --persist: #5fbf8a; --notify: #4cc3c9;
+    --tint: 14%;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 var(--sans); }
+button { font: inherit; color: inherit; }
+button:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 14px 20px;
+  background: var(--surface); border-bottom: 1px solid var(--line); }
+header h1 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+header h1 small { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 8px; }
+.steps { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; font-size: 12px; color: var(--muted); }
+.steps span { padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--sunk); }
+.steps b { color: var(--ink); font-weight: 600; }
+
+main { display: grid; grid-template-columns: minmax(360px, 520px) minmax(0, 1fr); gap: 16px; padding: 16px 20px 28px; }
+@media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+.col { display: grid; gap: 16px; align-content: start; min-width: 0; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; min-width: 0; }
+.card h2 { margin: 0 0 8px; font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: 8px; }
+.card h2 .n { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); color: var(--surface); font-size: 11px; letter-spacing: 0; }
+.card p { margin: 0 0 10px; color: var(--muted); max-width: 62ch; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { border: 1px solid var(--line); background: var(--sunk); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+.btn.primary:disabled { opacity: .6; cursor: progress; }
+.hint { font-size: 12px; color: var(--muted); }
+select.btn { padding: 5px 8px; }
+
+.prompt-box { width: 100%; height: 180px; margin-top: 10px; font: 12px/1.45 var(--mono); color: var(--ink);
+  background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; }
+
+.editor { position: relative; display: grid; grid-template-columns: auto 1fr; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--sunk); height: 52vh; min-height: 300px; overflow: hidden; }
+.gutter { margin: 0; padding: 10px 8px 10px 10px; font: 12.5px/1.6 var(--mono); color: var(--muted); text-align: right;
+  user-select: none; overflow: hidden; border-right: 1px solid var(--line); min-width: 44px; }
+.gutter .bad { color: var(--err); font-weight: 700; }
+.editor textarea { margin: 0; border: 0; resize: none; padding: 10px; font: 12.5px/1.6 var(--mono); color: var(--ink);
+  background: transparent; white-space: pre; overflow: auto; tab-size: 3; }
+.editor textarea:focus { outline: none; }
+
+.issues { display: grid; gap: 4px; margin-top: 10px; }
+.issue { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: baseline; text-align: left;
+  padding: 6px 8px; border-radius: 6px; border: 1px solid transparent; background: var(--err-soft); cursor: pointer; font-size: 13px; }
+.issue.warning { background: var(--warn-soft); }
+.issue.intent { background: var(--accent-soft); }
+.issue .ln { font: 12px var(--mono); color: var(--muted); }
+.issue .rule { font: 11px var(--mono); padding: 1px 6px; border-radius: 4px; background: var(--surface); color: var(--err); }
+.issue.warning .rule { color: var(--warn); }
+.issue.intent .rule { color: var(--accent); }
+
+.summary { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.summary .sys { font-weight: 650; font-size: 16px; margin-right: 6px; }
+.chip { font: 12px var(--mono); padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--sunk); color: var(--muted); }
+.chip.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.chip.err { color: var(--err); background: var(--err-soft); border-color: transparent; }
+.chip.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.desc { color: var(--muted); margin: 8px 0 0; max-width: 90ch; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--line); margin: 12px 0 0; }
+.tab { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.tab .badge { font: 11px var(--mono); margin-left: 4px; }
+.pane { padding-top: 12px; }
+.blocked { padding: 10px 12px; border-radius: 6px; background: var(--warn-soft); color: var(--ink); margin-bottom: 12px; }
+
+.canvas { position: relative; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px); background-size: 16px 16px; max-height: 70vh; }
+.stage { position: relative; margin: 0 auto; }
+.stage svg { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.edge { fill: none; stroke: var(--line); stroke-width: 1.6; }
+.edge.on-error { stroke: color-mix(in srgb, var(--err) 55%, var(--line)); stroke-dasharray: 5 4; }
+.edge.taken { stroke: var(--accent); stroke-width: 2.4; stroke-dasharray: none; }
+.arrow { fill: var(--line); } .arrow.taken { fill: var(--accent); }
+.elabel { position: absolute; transform: translate(-50%, -50%); font: 10px var(--mono); padding: 2px 5px; border-radius: 3px;
+  background: var(--surface); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.elabel.error { color: var(--err); }
+.elabel.taken { color: var(--accent); border-color: var(--accent); }
+.node { position: absolute; width: 196px; border: 1.5px solid var(--k); border-radius: 6px; padding: 6px 9px 7px; cursor: pointer;
+  text-align: left; background: color-mix(in srgb, var(--k) var(--tint), var(--surface)); }
+.node .k { display: block; font: 10px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--k); margin-bottom: 3px; }
+.node .l { display: block; font-size: 13px; font-weight: 550; line-height: 1.3; overflow-wrap: anywhere; }
+.node.trigger, .node.end { border-radius: 16px; }
+.node.branch { border-left-width: 5px; }
+.node.parallel, .node.join { border-style: dashed; }
+.node.visited { outline: 2px solid var(--accent); outline-offset: 1px; }
+.node.dim { opacity: .45; }
+.node.sel { box-shadow: 0 0 0 3px var(--hl); }
+
+.detail { margin-top: 12px; }
+.detail .title { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 6px; }
+.detail .title strong { font-size: 15px; }
+.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font: 12px var(--mono); }
+table.logic { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.logic th { text-align: left; font: 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  padding: 0 8px 6px 0; border-bottom: 1px solid var(--line); }
+table.logic td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.logic td.f { font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
+table.logic code { font: 12px/1.45 var(--mono); overflow-wrap: anywhere; }
+.scroll-x { overflow-x: auto; }
+
+.runs { display: grid; gap: 6px; }
+.run { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; background: var(--surface); }
+.run[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.run .n { font: 12px var(--mono); }
+.run .p { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill { font: 11px var(--mono); padding: 2px 8px; border-radius: 999px; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); } .pill.error { color: var(--err); background: var(--err-soft); }
+.kv { display: grid; grid-template-columns: 90px 1fr; gap: 4px 12px; margin-top: 12px; font-size: 13px; }
+.kv dt { color: var(--muted); font: 12px var(--mono); padding-top: 2px; }
+.kv dd { margin: 0; font: 12px/1.5 var(--mono); overflow-wrap: anywhere; }
+.kv ul { margin: 0; padding-left: 16px; }
+
+.verdict { padding: 8px 12px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; }
+.verdict.verified { background: var(--ok-soft); } .verdict.mismatch { background: var(--err-soft); }
+.verdict.notverified { background: var(--warn-soft); }
+pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px;
+  font: 12px/1.5 var(--mono); overflow: auto; max-height: 64vh; tab-size: 4; }
+.empty { color: var(--muted); padding: 24px 4px; }
+.fatal { padding: 10px 12px; border-radius: 6px; background: var(--err-soft); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Spec Studio <small>baby-programmer</small></h1>
+  <div class="steps" aria-label="How to use">
+    <span><b>1</b> copy the prompt</span><span><b>2</b> add your use case in an LLM</span><span><b>3</b> paste the spec and build</span>
+  </div>
+</header>
+
+<main>
+  <div class="col">
+    <section class="card">
+      <h2><span class="n">1</span>Get a spec from your LLM</h2>
+      <p>The prompt teaches an LLM the Baby Spec language. Paste it into Claude or another LLM, describe your use case after <code>USE CASE</code>, and send. It replies with a spec.</p>
+      <div class="row">
+        <button class="btn primary" id="copy-prompt">Copy prompt</button>
+        <button class="btn" id="toggle-prompt" aria-expanded="false">Show prompt</button>
+        <span class="hint" id="prompt-status"></span>
+      </div>
+      <textarea class="prompt-box" id="prompt" readonly hidden aria-label="LLM prompt"></textarea>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">2</span>Paste the spec</h2>
+      <p>Paste the LLM's whole reply; code fences and extra text are stripped.</p>
+      <div class="editor">
+        <pre class="gutter" id="gutter" aria-hidden="true">1</pre>
+        <textarea id="spec" spellcheck="false" aria-label="Baby Spec"></textarea>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="build">Build</button>
+        <span class="hint">⌘/Ctrl + Enter</span>
+        <select class="btn" id="examples" aria-label="Load an example"><option value="">Load an example…</option></select>
+      </div>
+      <div class="issues" id="issues"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card" id="results"><div class="empty">Building…</div></section>
+  </div>
+</main>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const KC = { trigger: 'trigger', call: 'call', compute: 'compute', validate: 'validate', branch: 'branch',
+               parallel: 'flowk', join: 'flowk', persist: 'persist', notify: 'notify' };
+  let last = null, flowIdx = 0, tab = 'flowchart', runIdx = 0, selStep = null, examples = [];
+
+  // ---------------------------------------------------------------- editor
+  const spec = $('spec'), gutter = $('gutter');
+  let badLines = new Set();
+  function renderGutter() {
+    const n = spec.value.split('\n').length;
+    let out = '';
+    for (let i = 1; i <= n; i++) out += badLines.has(i) ? `<span class="bad">${i}</span>\n` : `${i}\n`;
+    gutter.innerHTML = out;
+    gutter.scrollTop = spec.scrollTop;
+  }
+  spec.addEventListener('input', renderGutter);
+  spec.addEventListener('scroll', () => { gutter.scrollTop = spec.scrollTop; });
+  spec.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doBuild(); }
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      const s = spec.selectionStart;
+      spec.setRangeText('   ', s, spec.selectionEnd, 'end');
+      renderGutter();
+    }
+  });
+  function gotoLine(n) {
+    const lines = spec.value.split('\n');
+    let start = 0;
+    for (let i = 0; i < n - 1 && i < lines.length; i++) start += lines[i].length + 1;
+    spec.focus();
+    spec.setSelectionRange(start, start + (lines[n - 1] || '').length);
+    const lh = parseFloat(getComputedStyle(spec).lineHeight) || 20;
+    spec.scrollTop = Math.max(0, (n - 4) * lh);
+  }
+
+  // ---------------------------------------------------------------- prompt
+  let promptText = null;
+  async function getPrompt() {
+    if (promptText === null) promptText = await (await fetch('/api/prompt')).text();
+    return promptText;
+  }
+  $('copy-prompt').addEventListener('click', async () => {
+    const t = await getPrompt();
+    try { await navigator.clipboard.writeText(t); $('prompt-status').textContent = `Copied (${t.length.toLocaleString()} characters). Add your use case at the end.`; }
+    catch { $('prompt').hidden = false; $('prompt').value = t; $('prompt').select(); $('prompt-status').textContent = 'Select all and copy the text below.'; }
+  });
+  $('toggle-prompt').addEventListener('click', async () => {
+    const box = $('prompt');
+    box.hidden = !box.hidden;
+    $('toggle-prompt').setAttribute('aria-expanded', String(!box.hidden));
+    $('toggle-prompt').textContent = box.hidden ? 'Show prompt' : 'Hide prompt';
+    if (!box.hidden && !box.value) box.value = await getPrompt();
+  });
+
+  // ---------------------------------------------------------------- build
+  async function doBuild() {
+    const btn = $('build');
+    btn.disabled = true; btn.textContent = 'Building…';
+    try {
+      const r = await fetch('/api/build', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ spec: spec.value }) });
+      last = await r.json();
+      if (last.spec && last.spec !== spec.value) { spec.value = last.spec; }
+      flowIdx = 0; selStep = null;
+      runIdx = longestRun(last.flows?.[0]);
+      if (tab !== 'flowchart' && !(last.flows?.[0]?.code?.python)) tab = 'flowchart';
+      render();
+    } catch (e) {
+      $('results').innerHTML = `<div class="fatal">Couldn't reach the backend: ${esc(e.message)}. Is <code>python3.11 -m flow.app</code> still running?</div>`;
+    } finally { btn.disabled = false; btn.textContent = 'Build'; }
+  }
+  $('build').addEventListener('click', doBuild);
+
+  function renderIssues() {
+    const box = $('issues');
+    badLines = new Set((last.errors || []).map((e) => e.line));
+    const items = [
+      ...(last.errors || []).map((e) => ({ ...e, cls: '' })),
+      ...(last.warnings || []).map((e) => ({ ...e, cls: 'warning' })),
+      ...(last.intents || []).map((i) => ({ line: i.line, rule: 'intent', cls: 'intent',
+        message: `${i.step}.${i.field} is prose (“${i.text}”): it needs the logic model, or an exact expression in backquotes` })),
+    ].sort((a, b) => a.line - b.line);
+    box.innerHTML = items.map((e, k) => `<button class="issue ${e.cls}" data-k="${k}"><span class="ln">line ${e.line}</span>` +
+      `<span class="rule">${esc(e.rule)}</span><span>${esc(e.message)}</span></button>`).join('');
+    box.querySelectorAll('.issue').forEach((b) => b.addEventListener('click', () => gotoLine(items[+b.dataset.k].line)));
+    renderGutter();
+  }
+
+  // ---------------------------------------------------------------- results
+  function render() {
+    if (last.fatal) { $('results').innerHTML = `<div class="fatal">${esc(last.fatal)}</div>`; return; }
+    renderIssues();
+    const res = $('results');
+    if (!last.flows.length) {
+      res.innerHTML = `<div class="empty">${last.errors.length ? `Fix the ${last.errors.length} error(s) on the left to see the flow.` : 'No flows yet.'}</div>`;
+      return;
+    }
+    const f = last.flows[flowIdx];
+    const v = f.verification || {};
+    const chips = [];
+    chips.push(last.errors.length ? `<span class="chip err">${last.errors.length} error(s)</span>` : `<span class="chip ok">compiled</span>`);
+    chips.push(`<span class="chip">${f.mode}</span>`, `<span class="chip">${f.steps.length} steps</span>`);
+    if (f.runs.length) chips.push(`<span class="chip ${f.coverage === 1 ? 'ok' : 'warn'}">${f.runs.length} test runs · ${Math.round(f.coverage * 100)}% of paths</span>`);
+    for (const [lang, rep] of Object.entries(v)) {
+      const cls = rep.status === 'verified' ? 'ok' : rep.status === 'mismatch' ? 'err' : 'warn';
+      chips.push(`<span class="chip ${cls}">${lang} ${rep.status === 'verified' ? `verified ${rep.passed}/${rep.total}` : rep.status}</span>`);
+    }
+    const picker = last.flows.length > 1 ? `<select class="btn" id="flowpick">${last.flows.map((x, i) =>
+      `<option value="${i}" ${i === flowIdx ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : `<span class="chip">${esc(f.name)}</span>`;
+    const tabs = [['flowchart', 'Flowchart'], ['runs', 'Test runs', f.runs.length], ['python', 'Python', badge(v.python)],
+                  ['javascript', 'JavaScript', badge(v.javascript)], ['ir2', 'IR2']];
+    res.innerHTML = `<div class="summary"><span class="sys">${esc(last.system)}</span>${picker}${chips.join('')}</div>
+      ${last.description ? `<p class="desc">${esc(last.description)}</p>` : ''}
+      ${f.intent ? `<p class="desc"><b>Intent:</b> ${esc(f.intent)}</p>` : ''}
+      <nav class="tabs" role="tablist">${tabs.map(([k, n, b]) => `<button class="tab" role="tab" data-t="${k}" aria-selected="${k === tab}">${n}${b !== undefined && b !== '' ? ` <span class="badge">${b}</span>` : ''}</button>`).join('')}</nav>
+      <div class="pane" id="pane"></div>`;
+    res.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.t; render(); }));
+    const fp = $('flowpick');
+    if (fp) fp.addEventListener('change', () => { flowIdx = +fp.value; runIdx = longestRun(last.flows[flowIdx]); selStep = null; render(); });
+    ({ flowchart: paneFlow, runs: paneRuns, python: paneCode, javascript: paneCode, ir2: paneIR })[tab](f);
+  }
+  // Open on the run that walks the most of the flow, so the chart isn't mostly greyed out.
+  function longestRun(f) {
+    if (!f || !f.runs || !f.runs.length) return 0;
+    return f.runs.reduce((best, r, i) => (r.path.length > f.runs[best].path.length ? i : best), 0);
+  }
+  const badge = (rep) => !rep ? '' : rep.status === 'verified' ? '✓' : rep.status === 'mismatch' ? '✗' : '?';
+
+  function blocked(f) { return f.blocked ? `<div class="blocked">${esc(f.blocked)}</div>` : ''; }
+
+  // ---------------------------------------------------------------- flowchart
+  function paneFlow(f) {
+    $('pane').innerHTML = `${blocked(f)}<div class="canvas"><div class="stage" id="stage"></div></div><div class="detail" id="detail"></div>
+      ${f.runs.length ? `<p class="hint" style="margin-top:8px">Highlighted: the path of test run <b>${esc(f.runs[runIdx].name)}</b>. Pick another on the Test runs tab.</p>` : ''}`;
+    draw(f);
+    select(f, selStep || (f.steps.find((s) => s.kind === 'compute') || f.steps[0]).id);
+  }
+
+  function kcolor(s) { return s.kind === 'end' ? (s.status === 'error' ? 'var(--err)' : 'var(--ok)') : `var(--${KC[s.kind]})`; }
+
+  function draw(f) {
+    const NODE_W = 196, GAP_X = 30, GAP_Y = 48, PAD = 24;
+    const stage = $('stage');
+    const els = {};
+    f.steps.forEach((s) => {
+      const b = document.createElement('button');
+      b.className = `node ${s.kind}`; b.dataset.step = s.id;
+      b.style.setProperty('--k', kcolor(s));
+      b.innerHTML = `<span class="k">${esc(s.sub)}</span><span class="l">${esc(s.label)}</span>`;
+      b.addEventListener('click', () => select(f, s.id));
+      stage.appendChild(b); els[s.id] = b;
+    });
+    const preds = {}; f.steps.forEach((s) => { preds[s.id] = []; });
+    f.edges.forEach((e) => preds[e.dst].push(e.src));
+    const depth = {}; f.order.forEach((id) => { depth[id] = preds[id].length ? Math.max(...preds[id].map((p) => depth[p] + 1)) : 0; });
+    const rank = Object.fromEntries(f.order.map((id, i) => [id, i]));
+    const L = []; f.order.forEach((id) => { (L[depth[id]] = L[depth[id]] || []).push(id); });
+    const pos = {}; let y = PAD;
+    L.forEach((ids, li) => {
+      const want = (id) => preds[id].length ? preds[id].reduce((a, p) => a + pos[p].cx, 0) / preds[id].length : 0;
+      ids.sort((a, b) => (want(a) - want(b)) || (rank[a] - rank[b]));
+      const total = ids.length * NODE_W + (ids.length - 1) * GAP_X;
+      const mean = li === 0 ? 0 : ids.reduce((a, id) => a + want(id), 0) / ids.length;
+      let x = mean - total / 2, h = 0;
+      ids.forEach((id) => { pos[id] = { x, y, cx: x + NODE_W / 2 }; h = Math.max(h, els[id].offsetHeight); x += NODE_W + GAP_X; });
+      y += h + GAP_Y;
+    });
+    const xs = Object.values(pos).map((p) => p.x);
+    const minX = Math.min(...xs), width = Math.max(...xs) + NODE_W - minX + PAD * 2, height = y - GAP_Y + PAD;
+    Object.entries(pos).forEach(([id, p]) => {
+      p.x = p.x - minX + PAD; p.cx = p.x + NODE_W / 2; p.h = els[id].offsetHeight;
+      els[id].style.left = `${p.x}px`; els[id].style.top = `${p.y}px`;
+    });
+    stage.style.width = `${width}px`; stage.style.height = `${height}px`;
+    const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', width); svg.setAttribute('height', height);
+    const run = f.runs[runIdx];
+    const taken = new Set((run ? run.edges : []).map((e) => e.join('|')));
+    const outN = {}, outK = {};
+    f.edges.forEach((e) => { outN[e.src] = (outN[e.src] || 0) + 1; });
+    f.edges.forEach((e) => {
+      const a = pos[e.src], b = pos[e.dst];
+      const k = outK[e.src] = (outK[e.src] || 0) + 1;
+      const spread = outN[e.src] > 1 ? ((k - 1) / (outN[e.src] - 1) - 0.5) * 60 : 0;
+      const x1 = a.cx + spread, y1 = a.y + a.h, x2 = b.cx, y2 = b.y - 6, my = (y1 + y2) / 2;
+      const on = taken.has([e.src, e.dst, e.on].join('|'));
+      const p = document.createElementNS(NS, 'path');
+      p.setAttribute('d', `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`);
+      p.setAttribute('class', `edge on-${e.on}${on ? ' taken' : ''}`); svg.appendChild(p);
+      const t = document.createElementNS(NS, 'path');
+      t.setAttribute('d', `M${x2 - 5},${y2 - 1} L${x2 + 5},${y2 - 1} L${x2},${y2 + 6} Z`);
+      t.setAttribute('class', `arrow${on ? ' taken' : ''}`); svg.appendChild(t);
+      if (e.on !== 'next') {
+        const lab = document.createElement('span');
+        lab.className = `elabel ${e.on === 'error' ? 'error' : ''}${on ? ' taken' : ''}`; lab.textContent = e.on;
+        const tt = 0.35, bx = (1 - tt) ** 3 * x1 + 3 * (1 - tt) ** 2 * tt * x1 + 3 * (1 - tt) * tt * tt * x2 + tt ** 3 * x2;
+        const by = (1 - tt) ** 3 * y1 + 3 * (1 - tt) ** 2 * tt * my + 3 * (1 - tt) * tt * tt * my + tt ** 3 * y2;
+        lab.style.left = `${bx}px`; lab.style.top = `${by}px`; stage.appendChild(lab);
+      }
+    });
+    stage.insertBefore(svg, stage.firstChild);
+    if (run) {
+      const seen = new Set(run.path);
+      Object.entries(els).forEach(([id, el]) => { el.classList.toggle('visited', seen.has(id)); el.classList.toggle('dim', !seen.has(id)); });
+    }
+  }
+
+  function select(f, id) {
+    selStep = id;
+    document.querySelectorAll('.node').forEach((n) => n.classList.toggle('sel', n.dataset.step === id));
+    const s = f.steps.find((x) => x.id === id);
+    if (!s) return;
+    const rows = s.logic.map(([k, e]) => `<tr><td class="f">${esc(k)}</td><td><code>${esc(e)}</code></td></tr>`).join('');
+    $('detail').innerHTML = `<div class="title"><strong>${esc(s.label)}</strong><span class="chip">${esc(s.sub)} · ${esc(s.id)}</span>
+      ${s.line ? `<button class="link" data-line="${s.line}">spec line ${s.line}</button>` : ''}</div>
+      ${rows ? `<div class="scroll-x"><table class="logic"><thead><tr><th>field</th><th>IR2 logic</th></tr></thead><tbody>${rows}</tbody></table></div>`
+             : '<p class="hint">No expressions: this step is fully defined by its kind and connections.</p>'}`;
+    const l = $('detail').querySelector('[data-line]'); if (l) l.addEventListener('click', () => gotoLine(+l.dataset.line));
+  }
+
+  // ---------------------------------------------------------------- runs
+  function paneRuns(f) {
+    if (!f.runs.length) { $('pane').innerHTML = blocked(f) || '<div class="empty">No test runs.</div>'; return; }
+    const r = f.runs[runIdx];
+    $('pane').innerHTML = `<p class="hint">Invented inputs and service behaviours, chosen until every path through the flow was taken (${Math.round(f.coverage * 100)}%). The generated code must reproduce every one.</p>
+      <div class="runs">${f.runs.map((x, i) => `<button class="run" data-i="${i}" aria-pressed="${i === runIdx}"><span class="n">${esc(x.name)}</span>
+        <span class="p">${esc(x.path.join(' → '))}</span><span class="pill ${x.status}">${x.status}</span></button>`).join('')}</div>
+      <dl class="kv"><dt>input</dt><dd>${esc(JSON.stringify(r.input))}</dd>
+        ${Object.keys(r.mocks).length ? `<dt>services</dt><dd>${esc(JSON.stringify(r.mocks))}</dd>` : ''}
+        <dt>effects</dt><dd>${r.effects.length ? `<ul>${r.effects.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>` : 'none'}</dd>
+        <dt>result</dt><dd>${esc(r.status)}${r.response ? ` · ${esc(JSON.stringify(r.response))}` : ''}${r.error ? ` · ${esc(r.error)}` : ''}</dd></dl>`;
+    $('pane').querySelectorAll('.run').forEach((b) => b.addEventListener('click', () => { runIdx = +b.dataset.i; paneRuns(f); }));
+  }
+
+  // ---------------------------------------------------------------- code
+  function paneCode(f) {
+    const lang = tab, code = f.code[lang], rep = (f.verification || {})[lang];
+    if (!code) { $('pane').innerHTML = blocked(f) || '<div class="empty">No code.</div>'; return; }
+    const verdict = rep.status === 'verified'
+      ? `<div class="verdict verified"><b>Verified.</b> This code reproduces all ${rep.total} test runs exactly like the reference simulator: same result, same response, same calls, saves and messages in the same order.</div>`
+      : rep.status === 'mismatch' ? `<div class="verdict mismatch"><b>Mismatch</b> on ${rep.total - rep.passed} of ${rep.total} test runs. ${esc(rep.detail)}</div>`
+      : `<div class="verdict notverified"><b>Not verified:</b> ${esc(rep.detail)}.</div>`;
+    const file = `${f.name}.${lang === 'python' ? 'py' : 'mjs'}`;
+    $('pane').innerHTML = `${verdict}<div class="row" style="margin-bottom:8px"><button class="btn" id="copy-code">Copy</button>
+      <button class="btn" id="dl-code">Download ${esc(file)}</button><span class="hint" id="code-status"></span></div><pre class="code">${esc(code)}</pre>`;
+    $('copy-code').addEventListener('click', async () => { await navigator.clipboard.writeText(code); $('code-status').textContent = 'Copied.'; });
+    $('dl-code').addEventListener('click', () => {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([code], { type: 'text/plain' })); a.download = file; a.click();
+    });
+  }
+
+  function paneIR(f) {
+    const text = JSON.stringify(f.ir2, null, 2);
+    $('pane').innerHTML = `<p class="hint">The flow in IR2, the intermediate form every language is compiled from.</p><pre class="code">${esc(text)}</pre>`;
+  }
+
+  // ---------------------------------------------------------------- start
+  (async () => {
+    examples = await (await fetch('/api/examples')).json();
+    $('examples').insertAdjacentHTML('beforeend', examples.map((e, i) => `<option value="${i}">${esc(e.name)}</option>`).join(''));
+    $('examples').addEventListener('change', () => {
+      const i = $('examples').value; if (i === '') return;
+      spec.value = examples[+i].text; $('examples').value = ''; renderGutter(); doBuild();
+    });
+    spec.value = examples[0].text;
+    renderGutter();
+    doBuild();
+  })();
+})();
+</script>
+</body>
+</html>

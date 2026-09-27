@@ -49,8 +49,28 @@ code generation yet.
 | `spec/LANGUAGE.md` | **Baby Spec**: the system spec language an analyst writes and baby-programmer reads |
 | `spec/examples/` | example system specs |
 | `spec/compile.py` | spec → IR2 flows, or line-numbered errors (`python3.11 -m flow.spec check FILE`) |
+| `codegen/` | IR2 → Python and JavaScript, verified against the simulator on every test run |
+| `app/` | **Spec Studio**: paste a spec, get a flowchart, test runs and verified code (`python3.11 -m flow.app`) |
 | `examples/` | hand-written flows, each with scenarios |
 | `tests/` | unit tests |
+
+## Spec Studio
+
+```bash
+python3.11 -m flow.app          # opens http://127.0.0.1:8765
+```
+
+1. **Copy prompt** and paste it into Claude or another LLM, with your use case
+   written after `USE CASE`.
+2. Paste the LLM's reply into the editor and **Build**.
+3. You get the flowchart (the business view), invented test runs covering every
+   path, and Python and JavaScript code, each verified to reproduce every test
+   run exactly like the simulator. Errors point at spec lines.
+
+Standard library only for the app itself; verifying JavaScript needs Node.js.
+Java isn't generated yet: there is no JDK on this machine to verify it with.
+Values written as prose need the logic model (not trained yet), so the
+prompt asks the LLM for exact expressions.
 
 ## Use it
 
