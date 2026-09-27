@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import tempfile
 
+from flow.codegen.java import class_name, to_java
 from flow.codegen.javascript import to_javascript
 from flow.codegen.python import to_python
 from flow.sim import run, summary
@@ -100,7 +101,84 @@ def run_javascript(code, scenarios):
         return json.loads(p.stdout)
 
 
-def verify(flow, scenarios, languages=('python', 'javascript'), style='auto'):
+JAVA_HARNESS = r'''
+import java.nio.file.*;
+import java.util.*;
+
+public final class Harness {
+    @SuppressWarnings("unchecked")
+    public static void main(String[] args) throws Exception {
+        List<Object> scenarios = (List<Object>) R.parseJson(Files.readString(Path.of(args[0])));
+        List<Object> out = new ArrayList<>();
+        for (Object o : scenarios) {
+            Map<String, Object> sc = (Map<String, Object>) o;
+            Map<String, Object> mocks = sc.containsKey("mocks") ? (Map<String, Object>) sc.get("mocks") : new HashMap<>();
+            List<Object> effects = new ArrayList<>();
+            Map<String, Integer> attempts = new HashMap<>();
+            R.Services services = (service, op, a, step) -> {
+                int n = attempts.merge(step, 1, Integer::sum);
+                Object m = mocks.get(step);
+                List<Object> outcomes = m instanceof List ? (List<Object>) m : List.of(m);
+                Map<String, Object> outcome = (Map<String, Object>) outcomes.get(Math.min(n, outcomes.size()) - 1);
+                effects.add("call " + service + "." + op + " #" + n);
+                if (outcome.containsKey("ok")) return (Map<String, Object>) R.copy(outcome.get("ok"));
+                throw new R.ServiceError((String) outcome.get("error"));
+            };
+            R.Store store = (entity, op, data) -> effects.add("persist " + entity + "." + op);
+            R.Notifier notifier = (channel, to, message) -> effects.add("notify " + channel + " " + to + ": " + message);
+            Map<String, Object> r = FLOWCLASS.run((Map<String, Object>) R.copy(sc.get("input")), services, store, notifier);
+            r.put("effects", effects);
+            out.add(r);
+        }
+        System.out.println(R.toJson(out));
+    }
+}
+'''
+
+
+def java_tools():
+    """(javac, java) paths, or None. Checks JAVA_HOME, Homebrew's OpenJDK, then PATH;
+    the macOS /usr/bin stubs are skipped because they run only when a JDK is installed."""
+    candidates = []
+    if os.environ.get('JAVA_HOME'):
+        candidates.append(os.path.join(os.environ['JAVA_HOME'], 'bin'))
+    candidates += ['/opt/homebrew/opt/openjdk/bin', '/usr/local/opt/openjdk/bin']
+    found = shutil.which('javac')
+    if found:
+        candidates.append(os.path.dirname(found))
+    for d in candidates:
+        javac, java = os.path.join(d, 'javac'), os.path.join(d, 'java')
+        if os.path.exists(javac) and os.path.exists(java):
+            try:
+                if subprocess.run([javac, '-version'], capture_output=True, timeout=30).returncode == 0:
+                    return javac, java
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+    return None
+
+
+def run_java(code, cls, scenarios):
+    tools = java_tools()
+    javac, java = tools
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, f'{cls}.java'), 'w') as f:
+            f.write(code)
+        with open(os.path.join(d, 'Harness.java'), 'w') as f:
+            f.write(JAVA_HARNESS.replace('FLOWCLASS', cls))
+        with open(os.path.join(d, 'scenarios.json'), 'w') as f:
+            json.dump(scenarios, f)
+        p = subprocess.run([javac, '--release', '17', '-nowarn', '-d', 'out', f'{cls}.java', 'Harness.java'],
+                           cwd=d, capture_output=True, text=True, timeout=180)
+        if p.returncode != 0:
+            raise RuntimeError('javac: ' + p.stderr.strip()[-3000:])
+        p = subprocess.run([java, '-cp', 'out', 'Harness', 'scenarios.json'], cwd=d,
+                           capture_output=True, text=True, timeout=120)
+        if p.returncode != 0:
+            raise RuntimeError(p.stderr.strip()[-3000:])
+        return json.loads(p.stdout)
+
+
+def verify(flow, scenarios, languages=('python', 'javascript', 'java'), style='auto'):
     """{language: {'status': 'verified' | 'mismatch' | 'not verified', 'passed', 'total', 'detail'}}"""
     scenarios = list(scenarios)
     want = reference(flow, scenarios)
@@ -110,9 +188,17 @@ def verify(flow, scenarios, languages=('python', 'javascript'), style='auto'):
             report[lang] = {'status': 'not verified', 'passed': 0, 'total': len(scenarios),
                             'detail': 'Node.js is not installed'}
             continue
+        if lang == 'java' and java_tools() is None:
+            report[lang] = {'status': 'not verified', 'passed': 0, 'total': len(scenarios),
+                            'detail': 'no JDK found (javac)'}
+            continue
         try:
-            code = to_python(flow, style) if lang == 'python' else to_javascript(flow, style)
-            got = run_python(code, scenarios) if lang == 'python' else run_javascript(code, scenarios)
+            if lang == 'python':
+                got = run_python(to_python(flow, style), scenarios)
+            elif lang == 'javascript':
+                got = run_javascript(to_javascript(flow, style), scenarios)
+            else:
+                got = run_java(to_java(flow), class_name(flow), scenarios)
         except Exception as e:
             report[lang] = {'status': 'mismatch', 'passed': 0, 'total': len(scenarios), 'detail': str(e)}
             continue

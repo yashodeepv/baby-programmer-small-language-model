@@ -4,7 +4,7 @@ import json
 import random
 import unittest
 
-from flow.codegen.verify import node_available, verify
+from flow.codegen.verify import java_tools, node_available, verify
 from flow.gen.catalog import all_catalogs
 from flow.gen.coverage import synthesize
 from flow.gen.sampler import sample_flows
@@ -51,6 +51,8 @@ class Codegen(unittest.TestCase):
         self.assertEqual(rep['python']['status'], 'verified', rep['python']['detail'])
         if node_available():
             self.assertEqual(rep['javascript']['status'], 'verified', rep['javascript']['detail'])
+        if java_tools():
+            self.assertEqual(rep['java']['status'], 'verified', rep['java']['detail'])
 
     def test_hand_written_examples(self):
         for path in EXAMPLES:
@@ -77,7 +79,7 @@ class Codegen(unittest.TestCase):
         for f, meta in list(sample_flows(20, CATS, seed=9)):
             scenarios, _ = synthesize(rng, f, CATS[meta['catalog']])
             with self.subTest(flow=f.name):
-                rep = verify(f, scenarios.values(), style='machine')
+                rep = verify(f, scenarios.values(), languages=('python', 'javascript'), style='machine')
                 self.assertEqual(rep['python']['status'], 'verified', rep['python']['detail'])
                 if node_available():
                     self.assertEqual(rep['javascript']['status'], 'verified', rep['javascript']['detail'])
