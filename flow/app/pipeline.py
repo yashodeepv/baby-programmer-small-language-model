@@ -11,6 +11,7 @@ import random
 import re
 
 from flow.codegen import to_javascript, to_python
+from flow.codegen.java import to_java
 from flow.codegen.project import System, generate, verify_project
 from flow.codegen.verify import verify
 from flow.gen.coverage import synthesize
@@ -182,13 +183,13 @@ def build(text, seed=0):
                                      'status': r.status, 'response': r.response, 'error': r.error,
                                      'path': r.path(), 'edges': [list(e) for e in r.edges],
                                      'effects': [summary(e) for e in r.effects]})
-            item['code'] = {'python': to_python(flow), 'javascript': to_javascript(flow)}
+            item['code'] = {'python': to_python(flow), 'javascript': to_javascript(flow), 'java': to_java(flow)}
             item['verification'] = verify(flow, scenarios.values())
         out['flows'].append(item)
     out['project'] = {}
     if res.flows and len(all_scenarios) == len(res.flows):
         system = System(res.system, res.description, res.flows, all_scenarios)
-        for lang in ('python', 'javascript'):
+        for lang in ('python', 'javascript', 'java'):
             files = generate(system, lang)
             out['project'][lang] = {'files': files, 'verification': verify_project(files, lang)}
     return out

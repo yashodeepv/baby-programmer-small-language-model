@@ -50,7 +50,8 @@ code generation yet.
 | `spec/examples/` | example system specs |
 | `spec/compile.py` | spec → IR2 flows, or line-numbered errors (`python3.11 -m flow.spec check FILE`) |
 | `codegen/` | IR2 → Python and JavaScript, verified against the simulator on every test run |
-| `codegen/project/` | a whole system → a complete Python or Node.js project, verified by running its own generated tests |
+| `codegen/java.py` | IR2 → Java 17 (typed from the IR2 scope rules), verified with `javac` against the simulator |
+| `codegen/project/` | a whole system → a complete Python, Node.js or Java (Maven layout) project, verified by running its own generated tests |
 | `app/` | **Spec Studio**: paste a spec, get a flowchart, test runs and verified code (`python3.11 -m flow.app`) |
 | `examples/` | hand-written flows, each with scenarios |
 | `tests/` | unit tests |
@@ -71,10 +72,12 @@ python3.11 -m flow.app          # opens http://127.0.0.1:8765
    interface per service, one module per flow, HTTP/event/schedule triggers,
    in-memory adapters, a CLI, a README and a test suite built from the test runs.
    It is verified by running that suite inside the project (`python -m unittest`,
-   `node --test`), and downloads as a zip.
+   `node --test`, `javac` + `AllTests`), and downloads as a zip.
 
-Standard library only for the app itself; verifying JavaScript needs Node.js.
-Java isn't generated yet: there is no JDK on this machine to verify it with.
+Standard library only for the app itself; verifying JavaScript needs Node.js and
+verifying Java needs a JDK 17+ (found via `JAVA_HOME`, Homebrew's `openjdk`, or `PATH`).
+Generated Java projects have no dependencies; their tests are plain Java (no JUnit),
+run with `./run-tests.sh`, which needs `javac` on `PATH`.
 Values written as prose need the logic model (not trained yet), so the
 prompt asks the LLM for exact expressions.
 

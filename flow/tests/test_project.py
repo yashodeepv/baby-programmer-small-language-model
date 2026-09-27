@@ -6,7 +6,7 @@ import unittest
 from flow.app.pipeline import FlowHints
 from flow.app.prompt import example_spec
 from flow.codegen.project import System, generate, verify_project, zip_bytes
-from flow.codegen.verify import node_available
+from flow.codegen.verify import java_tools, node_available
 from flow.gen.coverage import synthesize
 from flow.spec import compile_spec
 
@@ -45,11 +45,22 @@ class Projects(unittest.TestCase):
         self.assertIn('export async function order_checkout(request, io)',
                       files['shop-orders/src/flows/order_checkout.js'])
 
+    def test_java_layout(self):
+        files = generate(system_from(checkout()), 'java')
+        for path in ['pom.xml', 'README.md', 'run-tests.sh', 'src/main/java/shop_orders/runtime/R.java',
+                     'src/main/java/shop_orders/Models.java', 'src/main/java/shop_orders/ports/Payments.java',
+                     'src/main/java/shop_orders/flows/OrderCheckout.java',
+                     'src/main/java/shop_orders/triggers/HttpTrigger.java',
+                     'src/test/java/shop_orders/OrderCheckoutTest.java']:
+            self.assertIn(f'shop-orders/{path}', files)
+        self.assertIn('Models.PaymentsChargeResult charge(String order_id, int amount)',
+                      files['shop-orders/src/main/java/shop_orders/ports/Payments.java'])
+
     def test_generated_test_suites_pass(self):
         for text in (checkout(), example_spec()):
             system = system_from(text)
-            for lang in ('python', 'javascript'):
-                if lang == 'javascript' and not node_available():
+            for lang in ('python', 'javascript', 'java'):
+                if (lang == 'javascript' and not node_available()) or (lang == 'java' and not java_tools()):
                     continue
                 with self.subTest(system=system.name, lang=lang):
                     rep = verify_project(generate(system, lang), lang)

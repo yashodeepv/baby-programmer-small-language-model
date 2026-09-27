@@ -321,7 +321,7 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
     const picker = last.flows.length > 1 ? `<select class="btn" id="flowpick">${last.flows.map((x, i) =>
       `<option value="${i}" ${i === flowIdx ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : `<span class="chip">${esc(f.name)}</span>`;
     const tabs = [['flowchart', 'Flowchart'], ['runs', 'Test runs', f.runs.length], ['python', 'Python', badge(v.python)],
-                  ['javascript', 'JavaScript', badge(v.javascript)],
+                  ['javascript', 'JavaScript', badge(v.javascript)], ['java', 'Java', badge(v.java)],
                   ['project', 'Project', badge((last.project || {})[projLang]?.verification)], ['ir2', 'IR2']];
     res.innerHTML = `<div class="summary"><span class="sys">${esc(last.system)}</span>${picker}${chips.join('')}</div>
       ${last.description ? `<p class="desc">${esc(last.description)}</p>` : ''}
@@ -331,7 +331,7 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
     res.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.t; render(); }));
     const fp = $('flowpick');
     if (fp) fp.addEventListener('change', () => { flowIdx = +fp.value; runIdx = longestRun(last.flows[flowIdx]); selStep = null; render(); });
-    ({ flowchart: paneFlow, runs: paneRuns, python: paneCode, javascript: paneCode, project: paneProject, ir2: paneIR })[tab](f);
+    ({ flowchart: paneFlow, runs: paneRuns, python: paneCode, javascript: paneCode, java: paneCode, project: paneProject, ir2: paneIR })[tab](f);
   }
   // Open on the run that walks the most of the flow, so the chart isn't mostly greyed out.
   function longestRun(f) {
@@ -454,7 +454,8 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
       ? `<div class="verdict verified"><b>Verified.</b> This code reproduces all ${rep.total} test runs exactly like the reference simulator: same result, same response, same calls, saves and messages in the same order.</div>`
       : rep.status === 'mismatch' ? `<div class="verdict mismatch"><b>Mismatch</b> on ${rep.total - rep.passed} of ${rep.total} test runs. ${esc(rep.detail)}</div>`
       : `<div class="verdict notverified"><b>Not verified:</b> ${esc(rep.detail)}.</div>`;
-    const file = `${f.name}.${lang === 'python' ? 'py' : 'mjs'}`;
+    const javaClass = f.name.split('_').filter(Boolean).map((p) => p[0].toUpperCase() + p.slice(1)).join('');
+    const file = lang === 'python' ? `${f.name}.py` : lang === 'javascript' ? `${f.name}.mjs` : `${javaClass}.java`;
     $('pane').innerHTML = `${verdict}<div class="row" style="margin-bottom:8px"><button class="btn" id="copy-code">Copy</button>
       <button class="btn" id="dl-code">Download ${esc(file)}</button><span class="hint" id="code-status"></span></div><pre class="code">${esc(code)}</pre>`;
     $('copy-code').addEventListener('click', async () => { await navigator.clipboard.writeText(code); $('code-status').textContent = 'Copied.'; });
@@ -471,9 +472,9 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
       return;
     }
     const paths = Object.keys(proj.files).sort();
-    if (!projFile || !(projFile in proj.files)) projFile = paths.find((p) => /\/flows\/[^/]+\.(py|js)$/.test(p) && !/(__init__|index)/.test(p)) || paths[0];
+    if (!projFile || !(projFile in proj.files)) projFile = paths.find((p) => /\/flows\/[^/]+\.(py|js|java)$/.test(p) && !/(__init__|index)/.test(p)) || paths[0];
     const rep = proj.verification;
-    const runner = projLang === 'python' ? 'python -m unittest' : 'node --test';
+    const runner = { python: 'python -m unittest', javascript: 'node --test', java: 'javac + AllTests' }[projLang];
     const verdict = rep.status === 'verified'
       ? `<div class="verdict verified"><b>Project tests pass: ${rep.passed}/${rep.total}.</b> The generated test suite was run inside the project with <code>${runner}</code>. It replays every test run, so keep it passing when you edit.</div>`
       : rep.status === 'failed' ? `<div class="verdict mismatch"><b>Project tests failed</b> (${rep.passed}/${rep.total}).<pre class="code" style="margin-top:8px">${esc(rep.detail)}</pre></div>`
@@ -489,6 +490,7 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
         <div class="seg" role="group" aria-label="Language">
           <button data-l="python" aria-pressed="${projLang === 'python'}">Python</button>
           <button data-l="javascript" aria-pressed="${projLang === 'javascript'}">JavaScript</button>
+          <button data-l="java" aria-pressed="${projLang === 'java'}">Java</button>
         </div>
         <button class="btn primary" id="dl-proj">Download .zip</button>
         <span class="hint">${paths.length} files</span><span class="hint" id="proj-status"></span>

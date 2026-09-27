@@ -22,10 +22,11 @@ import sys
 import tempfile
 import zipfile
 
-from flow.codegen.project import javascript_project, python_project
+from flow.codegen.project import java_project, javascript_project, python_project
 from flow.codegen.project.common import System
 
-GENERATORS = {'python': python_project.generate, 'javascript': javascript_project.generate}
+GENERATORS = {'python': python_project.generate, 'javascript': javascript_project.generate,
+              'java': java_project.generate}
 
 
 def generate(system, language):
@@ -65,6 +66,25 @@ def verify_project(files, language, timeout=120):
             total = int(m.group(1)) if m else 0
             fails = sum(int(x) for x in re.findall(r'(?:failures|errors)=(\d+)', text))
             passed = total - fails if p.returncode == 0 or fails else 0
+        elif language == 'java':
+            from flow.codegen.verify import java_tools
+            tools = java_tools()
+            if tools is None:
+                return {'status': 'not verified', 'passed': 0, 'total': 0, 'detail': 'no JDK found (javac)'}
+            javac, java = tools
+            sources = sorted(os.path.relpath(os.path.join(dp, f), root)
+                             for dp, _, fs in os.walk(os.path.join(root, 'src')) for f in fs if f.endswith('.java'))
+            p = subprocess.run([javac, '--release', '17', '-nowarn', '-d', 'build', *sources], cwd=root,
+                               capture_output=True, text=True, timeout=timeout)
+            if p.returncode != 0:
+                return {'status': 'failed', 'passed': 0, 'total': 0, 'detail': 'javac: ' + p.stderr.strip()[-3000:]}
+            pkg = os.listdir(os.path.join(root, 'src', 'test', 'java'))[0]
+            p = subprocess.run([java, '-cp', 'build', f'{pkg}.AllTests'], cwd=root, capture_output=True,
+                               text=True, timeout=timeout)
+            text = p.stdout + p.stderr
+            m = re.search(r'passed (\d+) failed (\d+)', text)
+            passed, fails = (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+            total = passed + fails
         else:
             if shutil.which('node') is None:
                 return {'status': 'not verified', 'passed': 0, 'total': 0, 'detail': 'Node.js is not installed'}
