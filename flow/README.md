@@ -50,6 +50,7 @@ code generation yet.
 | `spec/examples/` | example system specs |
 | `spec/compile.py` | spec → IR2 flows, or line-numbered errors (`python3.11 -m flow.spec check FILE`) |
 | `codegen/` | IR2 → Python and JavaScript, verified against the simulator on every test run |
+| `codegen/project/` | a whole system → a complete Python or Node.js project, verified by running its own generated tests |
 | `app/` | **Spec Studio**: paste a spec, get a flowchart, test runs and verified code (`python3.11 -m flow.app`) |
 | `examples/` | hand-written flows, each with scenarios |
 | `tests/` | unit tests |
@@ -66,6 +67,11 @@ python3.11 -m flow.app          # opens http://127.0.0.1:8765
 3. You get the flowchart (the business view), invented test runs covering every
    path, and Python and JavaScript code, each verified to reproduce every test
    run exactly like the simulator. Errors point at spec lines.
+4. The **Project** tab holds a complete project per language: typed models, one
+   interface per service, one module per flow, HTTP/event/schedule triggers,
+   in-memory adapters, a CLI, a README and a test suite built from the test runs.
+   It is verified by running that suite inside the project (`python -m unittest`,
+   `node --test`), and downloads as a zip.
 
 Standard library only for the app itself; verifying JavaScript needs Node.js.
 Java isn't generated yet: there is no JDK on this machine to verify it with.

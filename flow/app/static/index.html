@@ -149,6 +149,17 @@ table.logic code { font: 12px/1.45 var(--mono); overflow-wrap: anywhere; }
 pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px;
   font: 12px/1.5 var(--mono); overflow: auto; max-height: 64vh; tab-size: 4; }
 .empty { color: var(--muted); padding: 24px 4px; }
+.proj { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 720px) { .proj { grid-template-columns: 1fr; } }
+.tree { display: grid; gap: 1px; border: 1px solid var(--line); border-radius: 6px; padding: 6px; background: var(--sunk);
+  max-height: 64vh; overflow: auto; }
+.tree .dir { font: 11px var(--mono); color: var(--muted); padding: 6px 6px 2px; }
+.tree button { text-align: left; border: 0; background: none; padding: 3px 6px; border-radius: 4px; cursor: pointer;
+  font: 12px var(--mono); overflow-wrap: anywhere; }
+.tree button[aria-current="true"] { background: var(--accent-soft); color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--sunk); padding: 5px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
 .fatal { padding: 10px 12px; border-radius: 6px; background: var(--err-soft); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -202,6 +213,7 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
   const KC = { trigger: 'trigger', call: 'call', compute: 'compute', validate: 'validate', branch: 'branch',
                parallel: 'flowk', join: 'flowk', persist: 'persist', notify: 'notify' };
   let last = null, flowIdx = 0, tab = 'flowchart', runIdx = 0, selStep = null, examples = [];
+  let projLang = 'python', projFile = null;
 
   // ---------------------------------------------------------------- editor
   const spec = $('spec'), gutter = $('gutter');
@@ -309,7 +321,8 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
     const picker = last.flows.length > 1 ? `<select class="btn" id="flowpick">${last.flows.map((x, i) =>
       `<option value="${i}" ${i === flowIdx ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : `<span class="chip">${esc(f.name)}</span>`;
     const tabs = [['flowchart', 'Flowchart'], ['runs', 'Test runs', f.runs.length], ['python', 'Python', badge(v.python)],
-                  ['javascript', 'JavaScript', badge(v.javascript)], ['ir2', 'IR2']];
+                  ['javascript', 'JavaScript', badge(v.javascript)],
+                  ['project', 'Project', badge((last.project || {})[projLang]?.verification)], ['ir2', 'IR2']];
     res.innerHTML = `<div class="summary"><span class="sys">${esc(last.system)}</span>${picker}${chips.join('')}</div>
       ${last.description ? `<p class="desc">${esc(last.description)}</p>` : ''}
       ${f.intent ? `<p class="desc"><b>Intent:</b> ${esc(f.intent)}</p>` : ''}
@@ -318,14 +331,14 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
     res.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.t; render(); }));
     const fp = $('flowpick');
     if (fp) fp.addEventListener('change', () => { flowIdx = +fp.value; runIdx = longestRun(last.flows[flowIdx]); selStep = null; render(); });
-    ({ flowchart: paneFlow, runs: paneRuns, python: paneCode, javascript: paneCode, ir2: paneIR })[tab](f);
+    ({ flowchart: paneFlow, runs: paneRuns, python: paneCode, javascript: paneCode, project: paneProject, ir2: paneIR })[tab](f);
   }
   // Open on the run that walks the most of the flow, so the chart isn't mostly greyed out.
   function longestRun(f) {
     if (!f || !f.runs || !f.runs.length) return 0;
     return f.runs.reduce((best, r, i) => (r.path.length > f.runs[best].path.length ? i : best), 0);
   }
-  const badge = (rep) => !rep ? '' : rep.status === 'verified' ? '✓' : rep.status === 'mismatch' ? '✗' : '?';
+  const badge = (rep) => !rep ? '' : rep.status === 'verified' ? '✓' : (rep.status === 'mismatch' || rep.status === 'failed') ? '✗' : '?';
 
   function blocked(f) { return f.blocked ? `<div class="blocked">${esc(f.blocked)}</div>` : ''; }
 
@@ -447,6 +460,53 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
     $('copy-code').addEventListener('click', async () => { await navigator.clipboard.writeText(code); $('code-status').textContent = 'Copied.'; });
     $('dl-code').addEventListener('click', () => {
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([code], { type: 'text/plain' })); a.download = file; a.click();
+    });
+  }
+
+  // ---------------------------------------------------------------- project
+  function paneProject(f) {
+    const proj = (last.project || {})[projLang];
+    if (!proj) {
+      $('pane').innerHTML = blocked(f) || '<div class="empty">No project yet: build a spec without errors or prose values.</div>';
+      return;
+    }
+    const paths = Object.keys(proj.files).sort();
+    if (!projFile || !(projFile in proj.files)) projFile = paths.find((p) => /\/flows\/[^/]+\.(py|js)$/.test(p) && !/(__init__|index)/.test(p)) || paths[0];
+    const rep = proj.verification;
+    const runner = projLang === 'python' ? 'python -m unittest' : 'node --test';
+    const verdict = rep.status === 'verified'
+      ? `<div class="verdict verified"><b>Project tests pass: ${rep.passed}/${rep.total}.</b> The generated test suite was run inside the project with <code>${runner}</code>. It replays every test run, so keep it passing when you edit.</div>`
+      : rep.status === 'failed' ? `<div class="verdict mismatch"><b>Project tests failed</b> (${rep.passed}/${rep.total}).<pre class="code" style="margin-top:8px">${esc(rep.detail)}</pre></div>`
+      : `<div class="verdict notverified"><b>Not verified:</b> ${esc(rep.detail)}.</div>`;
+    let tree = '', lastDir = null;
+    for (const p of paths) {
+      const i = p.lastIndexOf('/'), dir = p.slice(0, i), name = p.slice(i + 1);
+      if (dir !== lastDir) { tree += `<div class="dir">${esc(dir)}/</div>`; lastDir = dir; }
+      tree += `<button data-p="${esc(p)}" aria-current="${p === projFile}">${esc(name)}</button>`;
+    }
+    $('pane').innerHTML = `${verdict}
+      <div class="row" style="margin-bottom:10px">
+        <div class="seg" role="group" aria-label="Language">
+          <button data-l="python" aria-pressed="${projLang === 'python'}">Python</button>
+          <button data-l="javascript" aria-pressed="${projLang === 'javascript'}">JavaScript</button>
+        </div>
+        <button class="btn primary" id="dl-proj">Download .zip</button>
+        <span class="hint">${paths.length} files</span><span class="hint" id="proj-status"></span>
+      </div>
+      <div class="proj"><nav class="tree" aria-label="Project files">${tree}</nav>
+        <div><div class="hint" style="margin-bottom:6px"><code>${esc(projFile)}</code></div><pre class="code">${esc(proj.files[projFile])}</pre></div></div>`;
+    $('pane').querySelectorAll('.tree button').forEach((b) => b.addEventListener('click', () => { projFile = b.dataset.p; paneProject(f); }));
+    $('pane').querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => { projLang = b.dataset.l; projFile = null; render(); }));
+    $('dl-proj').addEventListener('click', async () => {
+      $('proj-status').textContent = 'Preparing…';
+      const r = await fetch('/api/project', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ spec: spec.value, language: projLang }) });
+      if (!r.ok) { $('proj-status').textContent = 'Build the spec without errors first.'; return; }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await r.blob());
+      a.download = `${last.system}-${projLang}.zip`;
+      a.click();
+      $('proj-status').textContent = 'Downloaded.';
     });
   }
 

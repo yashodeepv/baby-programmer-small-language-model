@@ -15,7 +15,7 @@ import os
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from flow.app.pipeline import build
+from flow.app.pipeline import build, project_zip
 from flow.app.prompt import build_prompt, example_spec
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
@@ -61,13 +61,26 @@ class Handler(BaseHTTPRequestHandler):
             self.send(404, 'not found', 'text/plain')
 
     def do_POST(self):
-        if self.path != '/api/build':
+        if self.path not in ('/api/build', '/api/project'):
             return self.send(404, 'not found', 'text/plain')
         n = int(self.headers.get('Content-Length', 0))
         if n > MAX_BODY:
             return self.json({'fatal': 'the spec is too large (limit 1 MB)'}, 413)
         try:
-            spec = json.loads(self.rfile.read(n) or b'{}').get('spec', '')
+            body = json.loads(self.rfile.read(n) or b'{}')
+            spec = body.get('spec', '')
+            if self.path == '/api/project':
+                lang = body.get('language', 'python')
+                data, system = project_zip(spec, lang)
+                if data is None:
+                    return self.json({'fatal': 'build the spec without errors first'}, 400)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/zip')
+                self.send_header('Content-Disposition', f'attachment; filename="{system}-{lang}.zip"')
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             self.json(build(spec))
         except Exception as e:                  # a bug here should show in the UI, not kill the server
             traceback.print_exc()

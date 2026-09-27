@@ -37,6 +37,8 @@ class Pipeline(unittest.TestCase):
         self.assertIn('def run(', f['code']['python'])
         self.assertIn('export async function run(', f['code']['javascript'])
         self.assertTrue(all(s['line'] > 0 for s in f['steps']))
+        self.assertEqual(r['project']['python']['verification']['status'], 'verified')
+        self.assertIn('leave-desk/pyproject.toml', r['project']['python']['files'])
 
     def test_build_reports_errors_with_lines(self):
         r = build(example_spec().replace('Retry 2 times', 'Retry 8 times'))

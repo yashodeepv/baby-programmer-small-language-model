@@ -11,6 +11,7 @@ import random
 import re
 
 from flow.codegen import to_javascript, to_python
+from flow.codegen.project import System, generate, verify_project
 from flow.codegen.verify import verify
 from flow.gen.coverage import synthesize
 from flow.gen.order import canonical_order
@@ -153,6 +154,7 @@ def build(text, seed=0):
         'flows': [],
     }
     rng = random.Random(seed)
+    all_scenarios = {}
     for flow in res.flows:
         item = {
             'name': flow.name, 'mode': flow.mode, 'intent': flow.intent,
@@ -172,6 +174,7 @@ def build(text, seed=0):
                                'logic model. Write them as exact expressions in backquotes to build code now.')
         else:
             scenarios, cov = synthesize(rng, flow, FlowHints(flow))
+            all_scenarios[flow.name] = scenarios
             item['coverage'] = cov
             for name, sc in scenarios.items():
                 r = run(flow, sc['input'], sc.get('mocks', {}))
@@ -182,4 +185,20 @@ def build(text, seed=0):
             item['code'] = {'python': to_python(flow), 'javascript': to_javascript(flow)}
             item['verification'] = verify(flow, scenarios.values())
         out['flows'].append(item)
+    out['project'] = {}
+    if res.flows and len(all_scenarios) == len(res.flows):
+        system = System(res.system, res.description, res.flows, all_scenarios)
+        for lang in ('python', 'javascript'):
+            files = generate(system, lang)
+            out['project'][lang] = {'files': files, 'verification': verify_project(files, lang)}
     return out
+
+
+def project_zip(text, language, seed=0):
+    """The generated project as a zip, or None if the spec doesn't build cleanly."""
+    from flow.codegen.project import zip_bytes
+    result = build(text, seed)
+    project = result.get('project', {}).get(language)
+    if not project:
+        return None, result['system']
+    return zip_bytes(project['files']), result['system']
