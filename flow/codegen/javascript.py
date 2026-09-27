@@ -136,6 +136,8 @@ def expr(e, ref=local_ref):
         else:
             chain = E(e.arr)
         k = e.k
+        if e.op == 'count' and not e.pred and not e.mapf:
+            return f'{chain}.length'
         if e.pred:
             kind, kk = e.pred
             test = {'even': 'v % 2 === 0', 'odd': 'v % 2 !== 0', 'gt': f'v > {kk}', 'lt': f'v < {kk}',

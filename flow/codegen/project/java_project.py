@@ -1,24 +1,33 @@
-"""java_project.py - A system -> a complete Java 17 project (Maven layout, no dependencies).
+"""java_project.py - A system -> a Spring Boot 3 project (Java 17, Maven).
 
     <system>/
-      pom.xml   README.md   run-tests.sh   run.sh
+      pom.xml   README.md
       src/main/java/<pkg>/
-        runtime/R.java        results, service calls, arithmetic, JSON
-        Models.java           records for entities, flow inputs, service contracts (+ fromMap/toMap)
-        ports/                one typed interface per service, and Services (routes calls to them)
-        flows/                one class per flow
-        Flows.java            the registry and what triggers each flow
-        triggers/             HttpTrigger.java (JDK HttpServer), Events.java, Schedule.java
-        adapters/Memory.java  in-memory store, printing notifier, fake services
-        App.java              serve | run | event | tick
-      src/test/java/<pkg>/    one test class per flow (plain Java, no JUnit), AllTests.java
+        Application.java          @SpringBootApplication, scheduling on
+        runtime/R.java            results, service calls, 32-bit arithmetic
+        Models.java               records for entities, flow inputs, service contracts
+        ports/                    one typed interface per service; ServiceRouter routes flow calls to them
+        adapters/                 @Component stand-ins: in-memory store, logging notifier, fake services
+        flows/                    one @Service per flow; the logic itself is plain Java
+        web/FlowController.java   @RestController: one endpoint per HTTP trigger
+        events/                   FlowEvent, and an @EventListener per event trigger
+        schedule/ScheduledFlows   @Scheduled per schedule trigger
+      src/main/resources/application.properties
+      src/test/java/<pkg>/        JUnit 5: every scenario per flow, plus a Spring context + HTTP test
+      src/test/resources/scenarios/<flow>.json
+
+Replacing a stand-in is ordinary Spring: declare your own bean of the port's
+type and mark it @Primary (or remove the fake).
 """
 
 import json
+import re
 
-from flow.codegen.java import RUNTIME_BODY, RUNTIME_IMPORTS, flow_method, var
+from flow.codegen.java import RUNTIME_BODY, flow_method
 from flow.codegen.project.common import camel, collect_types, outline, snake, trigger_line
 from flow.ir2.types import BOOL, INT, STR, ListT, RecordT
+
+SPRING_BOOT = '3.5.0'
 
 JAVA_RESERVED = {'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class', 'const',
                  'continue', 'default', 'do', 'double', 'else', 'enum', 'extends', 'final', 'finally', 'float',
@@ -27,9 +36,17 @@ JAVA_RESERVED = {'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catc
                  'super', 'switch', 'synchronized', 'this', 'throw', 'throws', 'transient', 'try', 'void',
                  'volatile', 'while', 'true', 'false', 'null', 'var', 'record', 'yield'}
 
+# The runtime without its JSON section: Spring brings Jackson.
+RUNTIME = RUNTIME_BODY.split('    // ---- JSON')[0].rstrip() + '\n'
+
 
 def ident(name):
     return name + '_' if name in JAVA_RESERVED else name
+
+
+def lower_camel(name):
+    c = camel(name)
+    return ident(c[:1].lower() + c[1:])
 
 
 def jstr(s):
@@ -49,7 +66,6 @@ def jtype(t, namer, boxed=False):
 
 
 def from_obj(t, code, namer, depth=0):
-    """An Object holding JSON-shaped data -> the typed Java value."""
     if t == INT:
         return f'((Number) {code}).intValue()'
     if t == STR:
@@ -57,14 +73,13 @@ def from_obj(t, code, namer, depth=0):
     if t == BOOL:
         return f'((Boolean) {code})'
     if isinstance(t, ListT):
-        x = f'x{depth}'                         # nested lists need distinct lambda names
+        x = f'x{depth}'
         return (f'R.asList({code}).stream().map({x} -> {from_obj(t.elem, x, namer, depth + 1)})'
                 f'.collect(Collectors.toList())')
     return f'Models.{namer.names[t]}.fromMap(R.asMap({code}))'
 
 
 def to_obj(t, code, depth=0):
-    """A typed Java value -> JSON-shaped data."""
     if isinstance(t, ListT):
         x = f'x{depth}'
         return f'{code}.stream().map({x} -> (Object) {to_obj(t.elem, x, depth + 1)}).collect(Collectors.toList())'
@@ -85,22 +100,30 @@ def default(t, namer):
     return f'new Models.{namer.names[t]}(' + ', '.join(default(ft, namer) for _, ft in t.fields) + ')'
 
 
+def spring_cron(cron):
+    """Unix 5-field cron -> Spring's 6-field cron (seconds first)."""
+    return '0 ' + ' '.join(cron.split())
+
+
+# --------------------------------------------------------------------------
+# main sources
+# --------------------------------------------------------------------------
+
 def _models(pkg, namer):
     out = [f'package {pkg};', '', 'import java.util.*;', 'import java.util.stream.Collectors;',
            f'import {pkg}.runtime.R;', '',
            '/** Data shapes: entities, flow inputs and service contracts. Flows exchange them as maps',
-           ' *  (the JSON shape); fromMap/toMap convert. */', 'public final class Models {', '    private Models() {}']
+           ' *  (the JSON shape); fromMap/toMap convert. */', 'public final class Models {', 'private Models() {}']
     for name, rec in namer.defs:
         comps = ', '.join(f'{jtype(t, namer)} {ident(n)}' for n, t in rec.fields)
-        out += ['', f'    public record {name}({comps}) {{',
-                f'        public static {name} fromMap(Map<String, Object> m) {{',
-                f'            return new {name}(' + ', '.join(from_obj(t, f'm.get({jstr(n)})', namer)
-                                                        for n, t in rec.fields) + ');',
-                '        }', '',
-                '        public Map<String, Object> toMap() {',
-                '            Map<String, Object> m = new LinkedHashMap<>();']
-        out += [f'            m.put({jstr(n)}, {to_obj(t, ident(n))});' for n, t in rec.fields]
-        out += ['            return m;', '        }', '    }']
+        out += [f'public record {name}({comps}) {{',
+                f'public static {name} fromMap(Map<String, Object> m) {{',
+                f'return new {name}(' + ', '.join(from_obj(t, f'm.get({jstr(n)})', namer) for n, t in rec.fields) + ');',
+                '}',
+                'public Map<String, Object> toMap() {',
+                'Map<String, Object> m = new LinkedHashMap<>();']
+        out += [f'm.put({jstr(n)}, {to_obj(t, ident(n))});' for n, t in rec.fields]
+        out += ['return m;', '}', '}']
     out.append('}')
     return '\n'.join(out) + '\n'
 
@@ -109,484 +132,410 @@ def _ports(pkg, system, namer):
     files = {}
     for s, ops in sorted(system.services.items()):
         lines = [f'package {pkg}.ports;', '', 'import java.util.*;', f'import {pkg}.Models;',
-                 f'import {pkg}.runtime.R;', '', f'/** The {s} service. Throw R.ServiceError when a call fails. */',
+                 f'import {pkg}.runtime.R;', '',
+                 f'/** The {s} service. Throw R.ServiceError when a call fails. Provide your own',
+                 ' *  implementation as a Spring bean (mark it @Primary to replace the fake). */',
                  f'public interface {camel(s)} {{']
         for op, sig in ops.items():
             params = ', '.join(f'{jtype(t, namer)} {ident(n)}' for n, t in sig.input.fields)
-            lines.append(f'    {jtype(sig.output, namer)} {ident(op)}({params}) throws R.ServiceError;')
+            lines.append(f'{jtype(sig.output, namer)} {ident(op)}({params}) throws R.ServiceError;')
         lines.append('}')
         files[f'ports/{camel(s)}.java'] = '\n'.join(lines) + '\n'
-    fields = '\n'.join(f'    public {camel(s)} {ident(s)};' for s in sorted(system.services))
+
+    svcs = sorted(system.services)
+    fields = '\n'.join(f'private final {camel(s)} {ident(s)};' for s in svcs)
+    params = ', '.join(f'{camel(s)} {ident(s)}' for s in svcs)
+    assigns = '\n'.join(f'this.{ident(s)} = {ident(s)};' for s in svcs)
     cases = []
-    for s, ops in sorted(system.services.items()):
-        for op, sig in ops.items():
+    for s in svcs:
+        for op, sig in system.services[s].items():
             args = ', '.join(from_obj(t, f'args.get({jstr(n)})', namer) for n, t in sig.input.fields)
-            cases.append(f'            case {jstr(s + "." + op)}:\n'
-                         f'                if ({ident(s)} == null) throw new R.ServiceError("no implementation for service {s}");\n'
-                         f'                return {ident(s)}.{ident(op)}({args}).toMap();')
-    body = '\n'.join(cases)
-    files['ports/Services.java'] = f'''package {pkg}.ports;
+            cases.append(f'case {jstr(s + "." + op)}: return {ident(s)}.{ident(op)}({args}).toMap();')
+    files['ports/ServiceRouter.java'] = f'''package {pkg}.ports;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import org.springframework.stereotype.Component;
 import {pkg}.Models;
 import {pkg}.runtime.R;
 
-/** Routes the flows' calls to your service implementations: set the fields, then pass this to the IO. */
-public final class Services implements R.Services {{
+/** Routes the flows' service calls to the service beans. */
+@Component
+public class ServiceRouter implements R.Services {{
 {fields}
 
-    @Override
-    public Map<String, Object> call(String service, String op, Map<String, Object> args, String step)
-            throws R.ServiceError {{
-        switch (service + "." + op) {{
-{body}
-            default:
-                throw new R.ServiceError("unknown operation " + service + "." + op);
-        }}
-    }}
+public ServiceRouter({params}) {{
+{assigns}
+}}
+
+@Override
+public Map<String, Object> call(String service, String op, Map<String, Object> args, String step) throws R.ServiceError {{
+switch (service + "." + op) {{
+{chr(10).join(cases)}
+default: throw new R.ServiceError("unknown operation " + service + "." + op);
+}}
+}}
 }}
 '''
     return files
 
 
-def _memory(pkg, system, namer):
-    keys = ', '.join(f'{jstr(e)}, {jstr(rec.fields[0][0])}' for e, rec in system.entities.items())
-    fakes = []
+def _adapters(pkg, system, namer):
+    keys = ', '.join(f'Map.entry({jstr(e)}, {jstr(rec.fields[0][0])})' for e, rec in system.entities.items())
+    files = {
+        'adapters/InMemoryStore.java': f'''package {pkg}.adapters;
+
+import java.util.*;
+import org.springframework.stereotype.Component;
+import {pkg}.runtime.R;
+
+/** Keeps records in memory, one list per entity. Replace with a @Primary R.Store bean for a real database. */
+@Component
+public class InMemoryStore implements R.Store {{
+private static final Map<String, String> KEYS = Map.ofEntries({keys});
+
+public final Map<String, List<Map<String, Object>>> records = new HashMap<>();
+
+@Override
+public synchronized void store(String entity, String op, Map<String, Object> data) {{
+List<Map<String, Object>> rows = records.computeIfAbsent(entity, k -> new ArrayList<>());
+String key = KEYS.get(entity);
+if (op.equals("create")) {{
+rows.add(new LinkedHashMap<>(data));
+return;
+}}
+rows.removeIf(r -> Objects.equals(r.get(key), data.get(key)));
+if (op.equals("update")) rows.add(new LinkedHashMap<>(data));
+}}
+}}
+''',
+        'adapters/LoggingNotifier.java': f'''package {pkg}.adapters;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import {pkg}.runtime.R;
+
+/** Logs messages instead of sending them. Replace with a @Primary R.Notifier bean. */
+@Component
+public class LoggingNotifier implements R.Notifier {{
+private static final Logger log = LoggerFactory.getLogger(LoggingNotifier.class);
+
+@Override
+public void notify(String channel, String to, String message) {{
+log.info("[{{}} -> {{}}] {{}}", channel, to, message);
+}}
+}}
+''',
+    }
     for s, ops in sorted(system.services.items()):
         methods = []
         for op, sig in ops.items():
             params = ', '.join(f'{jtype(t, namer)} {ident(n)}' for n, t in sig.input.fields)
-            methods.append(f'        @Override public {jtype(sig.output, namer)} {ident(op)}({params}) {{\n'
-                           f'            return {default(sig.output, namer)};\n        }}')
-        fakes.append(f'    /** Always succeeds with placeholder values. */\n'
-                     f'    public static final class Fake{camel(s)} implements {camel(s)} {{\n'
-                     + '\n'.join(methods) + '\n    }')
-    wire = '\n'.join(f'        s.{ident(sv)} = new Fake{camel(sv)}();' for sv in sorted(system.services))
-    imports = '\n'.join(f'import {pkg}.ports.{camel(sv)};' for sv in sorted(system.services))
-    return f'''package {pkg}.adapters;
+            methods.append(f'@Override\npublic {jtype(sig.output, namer)} {ident(op)}({params}) {{\n'
+                           f'return {default(sig.output, namer)};\n}}')
+        files[f'adapters/Fake{camel(s)}.java'] = f'''package {pkg}.adapters;
 
 import java.util.*;
+import org.springframework.stereotype.Component;
 import {pkg}.Models;
-import {pkg}.ports.Services;
-{imports}
-import {pkg}.runtime.R;
+import {pkg}.ports.{camel(s)};
 
-/** In-memory adapters: run and try the flows before real systems are connected. */
-public final class Memory {{
-    private Memory() {{}}
-
-    static final Map<String, String> KEYS = mapOf({keys});
-
-    private static Map<String, String> mapOf(String... kv) {{
-        Map<String, String> m = new HashMap<>();
-        for (int i = 0; i < kv.length; i += 2) m.put(kv[i], kv[i + 1]);
-        return m;
-    }}
-
-    /** Keeps records in lists, one list per entity. */
-    public static final class MemoryStore implements R.Store {{
-        public final Map<String, List<Map<String, Object>>> records = new HashMap<>();
-
-        @Override
-        public synchronized void store(String entity, String op, Map<String, Object> data) {{
-            List<Map<String, Object>> rows = records.computeIfAbsent(entity, k -> new ArrayList<>());
-            String key = KEYS.get(entity);
-            if (op.equals("create")) {{ rows.add(new LinkedHashMap<>(data)); return; }}
-            rows.removeIf(r -> Objects.equals(r.get(key), data.get(key)));
-            if (op.equals("update")) rows.add(new LinkedHashMap<>(data));
-        }}
-    }}
-
-    /** Prints messages and keeps them in sent. */
-    public static final class PrintNotifier implements R.Notifier {{
-        public final List<String> sent = new ArrayList<>();
-
-        @Override
-        public synchronized void notify(String channel, String to, String message) {{
-            sent.add(channel + " " + to + ": " + message);
-            System.out.println("[" + channel + " -> " + to + "] " + message);
-        }}
-    }}
-
-{chr(10).join(fakes)}
-
-    public static Services fakeServices() {{
-        Services s = new Services();
-{wire}
-        return s;
-    }}
-
-    public static R.IO io() {{
-        return new R.IO(fakeServices(), new MemoryStore(), new PrintNotifier());
-    }}
+/** Stands in for the {s} service: always succeeds with placeholder values. */
+@Component
+public class Fake{camel(s)} implements {camel(s)} {{
+{chr(10).join(methods)}
 }}
 '''
+    return files
 
 
-def _flow_class(pkg, flow):
-    cls = camel(flow.name)
-    return (f'package {pkg}.flows;\n\nimport java.util.*;\nimport {pkg}.runtime.R;\n\n'
-            f'/** {flow.name}: {flow.intent or "generated flow"}\n'
-            f' *  Trigger: {trigger_line(flow)}   Mode: {flow.mode}\n'
-            f' *  Generated by baby-programmer from IR2. Regenerate rather than edit by hand. */\n'
-            f'public final class {cls} {{\n    private {cls}() {{}}\n\n{flow_method(flow)}\n}}\n')
-
-
-def _flows_registry(pkg, system):
-    puts = '\n'.join(f'        FLOWS.put({jstr(f.name)}, {camel(f.name)}::{var(f.name)});' for f in system.flows)
-    trig = []
-    for f in system.flows:
-        t = f.trigger()
-        cfg = ', '.join(f'{jstr(k)}, {jstr(v)}' for k, v in {'source': t.source, 'mode': f.mode, **t.config}.items())
-        trig.append(f'        TRIGGERS.put({jstr(f.name)}, Map.of({cfg}));')
-    imports = '\n'.join(f'import {pkg}.flows.{camel(f.name)};' for f in system.flows)
-    return f'''package {pkg};
+def _flow_service(pkg, flow):
+    cls = camel(flow.name) + 'Flow'
+    method = lower_camel(flow.name)
+    logic = flow_method(flow, name=method, indent='')
+    logic = logic.replace('public static Map<String, Object>', 'static Map<String, Object>', 1)
+    return f'''package {pkg}.flows;
 
 import java.util.*;
-{imports}
+import org.springframework.stereotype.Service;
+import {pkg}.ports.ServiceRouter;
 import {pkg}.runtime.R;
-
-/** Every flow, by name, and what triggers it. */
-public final class Flows {{
-    private Flows() {{}}
-
-    public static final Map<String, R.Flow> FLOWS = new LinkedHashMap<>();
-    public static final Map<String, Map<String, String>> TRIGGERS = new LinkedHashMap<>();
-
-    static {{
-{puts}
-{chr(10).join(trig)}
-    }}
-
-    public static Map<String, Object> run(String name, Map<String, Object> request, R.IO io) {{
-        R.Flow flow = FLOWS.get(name);
-        if (flow == null) throw new IllegalArgumentException("unknown flow " + name);
-        return R.execute(flow, request, io);
-    }}
-}}
-'''
-
-
-def _triggers(pkg, system):
-    builders = []
-    for f in system.flows:
-        t = f.trigger()
-        if t.source != 'schedule':
-            continue
-        vals = ', '.join(f'{jstr(n)}, ' + ('today' if ft == STR else ('0' if ft == INT else 'false' if ft == BOOL
-                                                                      else 'new ArrayList<>()'))
-                         for n, ft in t.payload.fields)
-        builders.append(f'            case {jstr(f.name)}: return R.map({vals});')
-    return {
-        'triggers/HttpTrigger.java': f'''package {pkg}.triggers;
-
-import com.sun.net.httpserver.HttpServer;
-import java.io.*;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.function.Supplier;
-import {pkg}.Flows;
-import {pkg}.runtime.R;
-
-/** HTTP entry points for the flows with an HTTP trigger (the JDK's own HttpServer). */
-public final class HttpTrigger {{
-    private HttpTrigger() {{}}
-
-    public static HttpServer serve(int port, Supplier<R.IO> ioFactory) throws IOException {{
-        Map<String, String> routes = new HashMap<>();
-        Flows.TRIGGERS.forEach((name, t) -> {{
-            if (t.get("source").equals("http")) routes.put(t.get("method") + " " + t.get("path"), name);
-        }});
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
-        server.createContext("/", ex -> {{
-            String name = routes.get(ex.getRequestMethod() + " " + ex.getRequestURI().getPath());
-            int code;
-            Object body;
-            if (name == null) {{
-                code = 404;
-                body = R.map("error", "no flow here");
-            }} else {{
-                String text = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-                Map<String, Object> request;
-                try {{
-                    request = text.isBlank() ? new LinkedHashMap<>() : R.asMap(R.parseJson(text));
-                }} catch (RuntimeException e) {{
-                    request = null;
-                }}
-                if (request == null) {{
-                    code = 400;
-                    body = R.map("error", "the body must be JSON");
-                }} else if (Flows.TRIGGERS.get(name).get("mode").equals("async")) {{
-                    Map<String, Object> req = request;
-                    new Thread(() -> Flows.run(name, req, ioFactory.get())).start();
-                    code = 202;
-                    body = R.map("accepted", true);
-                }} else {{
-                    Map<String, Object> result;
-                    try {{
-                        result = Flows.run(name, request, ioFactory.get());
-                    }} catch (RuntimeException e) {{
-                        result = null;
-                    }}
-                    if (result == null) {{
-                        code = 400;
-                        body = R.map("error", "missing or malformed field");
-                    }} else if (result.get("status").equals("ok")) {{
-                        code = 200;
-                        body = result.get("response") == null ? R.map() : result.get("response");
-                    }} else {{
-                        Map<String, Object> err = R.map("error", result.get("error"));
-                        if (result.get("response") != null) err.putAll(R.asMap(result.get("response")));
-                        code = 422;
-                        body = err;
-                    }}
-                }}
-            }}
-            byte[] out = R.toJson(body).getBytes(StandardCharsets.UTF_8);
-            ex.getResponseHeaders().set("Content-Type", "application/json");
-            ex.sendResponseHeaders(code, out.length);
-            try (OutputStream os = ex.getResponseBody()) {{ os.write(out); }}
-        }});
-        server.start();
-        routes.forEach((route, name) -> System.out.println("  " + route + "  ->  " + name));
-        System.out.println("listening on http://127.0.0.1:" + port + "/");
-        return server;
-    }}
-}}
-''',
-        'triggers/Events.java': f'''package {pkg}.triggers;
-
-import java.util.*;
-import {pkg}.Flows;
-import {pkg}.runtime.R;
-
-/** Event entry points: publish(event, payload) runs the flow listening for it. */
-public final class Events {{
-    private Events() {{}}
-
-    public static Map<String, Object> publish(String event, Map<String, Object> payload, R.IO io) {{
-        for (Map.Entry<String, Map<String, String>> e : Flows.TRIGGERS.entrySet()) {{
-            Map<String, String> t = e.getValue();
-            if (t.get("source").equals("event") && t.get("name").equals(event)) return Flows.run(e.getKey(), payload, io);
-        }}
-        throw new IllegalArgumentException("no flow listens for event " + event);
-    }}
-}}
-''',
-        'triggers/Schedule.java': f'''package {pkg}.triggers;
-
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.function.Supplier;
-import {pkg}.Flows;
-import {pkg}.runtime.R;
-
-/** Scheduled flows: runDue() runs every flow whose cron matches the current minute. */
-public final class Schedule {{
-    private Schedule() {{}}
-
-    /** The payload a scheduled run receives. Edit to suit. */
-    public static Map<String, Object> payloadFor(String name, LocalDateTime when) {{
-        String today = when.toLocalDate().toString();
-        switch (name) {{
-{chr(10).join(builders)}
-            default: return R.map();
-        }}
-    }}
-
-    public static Map<String, Map<String, Object>> runDue(LocalDateTime when, Supplier<R.IO> ioFactory) {{
-        Map<String, Map<String, Object>> out = new LinkedHashMap<>();
-        Flows.TRIGGERS.forEach((name, t) -> {{
-            if (t.get("source").equals("schedule") && cronMatches(t.get("cron"), when))
-                out.put(name, Flows.run(name, payloadFor(name, when), ioFactory.get()));
-        }});
-        return out;
-    }}
-
-    /** 5-field cron (minute hour day month weekday); *, *\\/n, a-b, a,b and numbers; weekday 0 is Sunday. */
-    public static boolean cronMatches(String cron, LocalDateTime when) {{
-        String[] f = cron.trim().split("\\\\s+");
-        if (f.length != 5) throw new IllegalArgumentException("expected 5 cron fields: " + cron);
-        int[] v = {{when.getMinute(), when.getHour(), when.getDayOfMonth(), when.getMonthValue(),
-                   when.getDayOfWeek().getValue() % 7}};
-        for (int i = 0; i < 5; i++) if (!fieldMatches(f[i], v[i])) return false;
-        return true;
-    }}
-
-    private static boolean fieldMatches(String field, int value) {{
-        for (String part : field.split(",")) {{
-            int step = 1;
-            if (part.contains("/")) {{
-                String[] ps = part.split("/");
-                part = ps[0];
-                step = Integer.parseInt(ps[1]);
-            }}
-            if (part.equals("*")) {{
-                if (value % step == 0) return true;
-                continue;
-            }}
-            String[] r = part.split("-");
-            int lo = Integer.parseInt(r[0]), hi = r.length > 1 ? Integer.parseInt(r[1]) : lo;
-            if (value >= lo && value <= hi && (value - lo) % step == 0) return true;
-        }}
-        return false;
-    }}
-
-    public static void loop(Supplier<R.IO> ioFactory) {{
-        Thread t = new Thread(() -> {{
-            LocalDateTime last = null;
-            while (true) {{
-                LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
-                if (!now.equals(last)) {{
-                    last = now;
-                    runDue(now, ioFactory).forEach((n, r) -> System.out.println(now + " " + n + ": " + r.get("status")));
-                }}
-                try {{ Thread.sleep(5000); }} catch (InterruptedException e) {{ return; }}
-            }}
-        }});
-        t.setDaemon(true);
-        t.start();
-    }}
-}}
-''',
-    }
-
-
-def _app(pkg):
-    return f'''package {pkg};
-
-import java.time.LocalDateTime;
-import java.util.*;
-import {pkg}.adapters.Memory;
-import {pkg}.runtime.R;
-import {pkg}.triggers.*;
 
 /**
- * java -cp build {pkg}.App serve [port]      HTTP triggers, plus the scheduler
- *                             run FLOW 'JSON'    run one flow with a JSON payload
- *                             event NAME 'JSON'  publish an event
- *                             tick               run the scheduled flows due this minute
- * Connect real systems by replacing Memory.io() with your own R.IO.
+ * {flow.name}: {flow.intent or "generated flow"}
+ * Trigger: {trigger_line(flow)}. Mode: {flow.mode}.
+ * Generated by baby-programmer from IR2. Regenerate rather than edit by hand.
  */
-public final class App {{
-    private App() {{}}
+@Service
+public class {cls} {{
+private final R.Services services;
+private final R.Store store;
+private final R.Notifier notifier;
 
-    public static void main(String[] args) throws Exception {{
-        String command = args.length > 0 ? args[0] : "";
-        switch (command) {{
-            case "serve":
-                Schedule.loop(Memory::io);
-                HttpTrigger.serve(args.length > 1 ? Integer.parseInt(args[1]) : 8000, Memory::io);
-                break;
-            case "run":
-                System.out.println(R.toJson(Flows.run(args[1], payload(args), Memory.io())));
-                break;
-            case "event":
-                System.out.println(R.toJson(Events.publish(args[1], payload(args), Memory.io())));
-                break;
-            case "tick":
-                System.out.println(R.toJson(Schedule.runDue(LocalDateTime.now(), Memory::io)));
-                break;
-            default:
-                System.err.println("usage: App serve [port] | run FLOW JSON | event NAME JSON | tick");
-                System.exit(1);
-        }}
-    }}
+public {cls}(ServiceRouter services, R.Store store, R.Notifier notifier) {{
+this.services = services;
+this.store = store;
+this.notifier = notifier;
+}}
 
-    private static Map<String, Object> payload(String[] args) {{
-        return args.length > 2 ? R.asMap(R.parseJson(args[2])) : new LinkedHashMap<>();
-    }}
+/** Run the flow once; failures come back as an error result. */
+public Map<String, Object> run(Map<String, Object> request) {{
+return R.execute({cls}::{method}, request, new R.IO(services, store, notifier));
+}}
+
+{logic}
 }}
 '''
 
 
-def _test_class(pkg, flow, scenarios):
-    cls = camel(flow.name) + 'Test'
-    text = json.dumps(scenarios)
-    chunks = [text[i:i + 20000] for i in range(0, len(text), 20000)] or ['{}']
-    parts = ',\n        '.join(jstr(c) for c in chunks)
-    return f'''package {pkg};
+def _controller(pkg, system):
+    http = [f for f in system.flows if f.trigger().source == 'http']
+    if not http:
+        return None
+    fields, params, assigns, methods = [], [], [], []
+    for f in http:
+        cls, var = camel(f.name) + 'Flow', lower_camel(f.name)
+        fields.append(f'private final {cls} {var};')
+        params.append(f'{cls} {var}')
+        assigns.append(f'this.{var} = {var};')
+        t = f.trigger()
+        mapping = {'GET': 'GetMapping', 'POST': 'PostMapping', 'PUT': 'PutMapping', 'DELETE': 'DeleteMapping'}[t.config['method']]
+        if f.mode == 'async':
+            body = (f'Map<String, Object> request = orEmpty(body);\n'
+                    f'executor.execute(() -> {var}.run(request));\n'
+                    f'return ResponseEntity.accepted().body(Map.of("accepted", true));')
+        else:
+            body = f'return respond({var}.run(orEmpty(body)));'
+        methods.append(f'/** {f.name}{": " + f.intent if f.intent else ""} */\n'
+                       f'@{mapping}({jstr(t.config["path"])})\n'
+                       f'public ResponseEntity<Object> {var}(@RequestBody(required = false) Map<String, Object> body) {{\n'
+                       f'{body}\n}}')
+    imports = '\n'.join(f'import {pkg}.flows.{camel(f.name)}Flow;' for f in http)
+    return f'''package {pkg}.web;
 
 import java.util.*;
-import {pkg}.flows.{camel(flow.name)};
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+{imports}
+
+/** One endpoint per HTTP-triggered flow. Errors from a flow answer 422 with its response. */
+@RestController
+public class FlowController {{
+private final TaskExecutor executor;
+{chr(10).join(fields)}
+
+public FlowController(@Qualifier("applicationTaskExecutor") TaskExecutor executor, {", ".join(params)}) {{
+this.executor = executor;
+{chr(10).join(assigns)}
+}}
+
+{chr(10).join(methods)}
+
+@ExceptionHandler({{ClassCastException.class, NullPointerException.class}})
+public ResponseEntity<Object> badRequest(RuntimeException e) {{
+return ResponseEntity.badRequest().body(Map.of("error", "missing or malformed field"));
+}}
+
+private static Map<String, Object> orEmpty(Map<String, Object> body) {{
+return body == null ? new LinkedHashMap<>() : body;
+}}
+
+@SuppressWarnings("unchecked")
+private static ResponseEntity<Object> respond(Map<String, Object> result) {{
+Object response = result.get("response");
+if ("ok".equals(result.get("status"))) return ResponseEntity.ok(response == null ? Map.of() : response);
+Map<String, Object> error = new LinkedHashMap<>();
+error.put("error", result.get("error"));
+if (response != null) error.putAll((Map<String, Object>) response);
+return ResponseEntity.unprocessableEntity().body(error);
+}}
+}}
+'''
+
+
+def _events(pkg, system):
+    ev = [f for f in system.flows if f.trigger().source == 'event']
+    files = {'events/FlowEvent.java': f'''package {pkg}.events;
+
+import java.util.Map;
+
+/** Publish with Spring's ApplicationEventPublisher: publisher.publishEvent(new FlowEvent("name", payload)). */
+public record FlowEvent(String name, Map<String, Object> payload) {{}}
+'''}
+    if not ev:
+        return files
+    fields, params, assigns, methods = [], [], [], []
+    for f in ev:
+        cls, var = camel(f.name) + 'Flow', lower_camel(f.name)
+        name = f.trigger().config['name']
+        fields.append(f'private final {cls} {var};')
+        params.append(f'{cls} {var}')
+        assigns.append(f'this.{var} = {var};')
+        methods.append(f'@EventListener(condition = "#event.name == \'{name}\'")\n'
+                       f'public void on{camel(name)}(FlowEvent event) {{\n{var}.run(event.payload());\n}}')
+    imports = '\n'.join(f'import {pkg}.flows.{camel(f.name)}Flow;' for f in ev)
+    files['events/FlowEventListeners.java'] = f'''package {pkg}.events;
+
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+{imports}
+
+/** Runs the flow listening for each event. */
+@Component
+public class FlowEventListeners {{
+{chr(10).join(fields)}
+
+public FlowEventListeners({", ".join(params)}) {{
+{chr(10).join(assigns)}
+}}
+
+{chr(10).join(methods)}
+}}
+'''
+    return files
+
+
+def _schedule(pkg, system):
+    sc = [f for f in system.flows if f.trigger().source == 'schedule']
+    if not sc:
+        return None
+    fields, params, assigns, methods = [], [], [], []
+    for f in sc:
+        cls, var = camel(f.name) + 'Flow', lower_camel(f.name)
+        t = f.trigger()
+        vals = ', '.join(f'{jstr(n)}, ' + ('LocalDate.now().toString()' if ft == STR else
+                                            '0' if ft == INT else 'false' if ft == BOOL else 'new ArrayList<>()')
+                         for n, ft in t.payload.fields)
+        fields.append(f'private final {cls} {var};')
+        params.append(f'{cls} {var}')
+        assigns.append(f'this.{var} = {var};')
+        methods.append(f'/** Unix cron "{t.config["cron"]}". Edit the payload to suit. */\n'
+                       f'@Scheduled(cron = {jstr(spring_cron(t.config["cron"]))})\n'
+                       f'public void {var}() {{\n{var}.run(R.map({vals}));\n}}')
+    imports = '\n'.join(f'import {pkg}.flows.{camel(f.name)}Flow;' for f in sc)
+    return f'''package {pkg}.schedule;
+
+import java.time.LocalDate;
+import java.util.*;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import {pkg}.runtime.R;
+{imports}
+
+/** Runs each scheduled flow on its cron. */
+@Component
+public class ScheduledFlows {{
+{chr(10).join(fields)}
+
+public ScheduledFlows({", ".join(params)}) {{
+{chr(10).join(assigns)}
+}}
+
+{chr(10).join(methods)}
+}}
+'''
+
+
+# --------------------------------------------------------------------------
+# tests
+# --------------------------------------------------------------------------
+
+def _flow_test(pkg, flow):
+    cls = camel(flow.name) + 'Flow'
+    method = lower_camel(flow.name)
+    return f'''package {pkg}.flows;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.InputStream;
+import java.util.*;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.TestFactory;
 import {pkg}.runtime.R;
 
 /** {flow.name}: every generated scenario, replayed. Generated from the reference simulator. */
-public final class {cls} {{
-    private {cls}() {{}}
+class {cls}Test {{
+private static final ObjectMapper JSON = new ObjectMapper();
 
-    // split so no single string constant nears the class-file limit
-    private static final String SCENARIOS = String.join("", new String[] {{
-        {parts}
-    }});
-
-    /** Returns {{passed, failed}}. */
-    @SuppressWarnings("unchecked")
-    public static int[] run() {{
-        Map<String, Object> scenarios = R.asMap(R.parseJson(SCENARIOS));
-        int passed = 0, failed = 0;
-        for (Map.Entry<String, Object> entry : scenarios.entrySet()) {{
-            Map<String, Object> sc = R.asMap(entry.getValue());
-            Map<String, Object> mocks = sc.containsKey("mocks") ? R.asMap(sc.get("mocks")) : new HashMap<>();
-            List<Object> effects = new ArrayList<>();
-            Map<String, Integer> attempts = new HashMap<>();
-            R.Services services = (service, op, args, step) -> {{
-                int n = attempts.merge(step, 1, Integer::sum);
-                Object m = mocks.get(step);
-                List<Object> outcomes = m instanceof List ? (List<Object>) m : List.of(m);
-                Map<String, Object> outcome = R.asMap(outcomes.get(Math.min(n, outcomes.size()) - 1));
-                effects.add("call " + service + "." + op + " #" + n);
-                if (outcome.containsKey("ok")) return R.asMap(R.copy(outcome.get("ok")));
-                throw new R.ServiceError((String) outcome.get("error"));
-            }};
-            R.Store store = (entity, op, data) -> effects.add("persist " + entity + "." + op);
-            R.Notifier notifier = (channel, to, message) -> effects.add("notify " + channel + " " + to + ": " + message);
-            Map<String, Object> result = R.execute({camel(flow.name)}::{var(flow.name)}, R.asMap(R.copy(sc.get("input"))),
-                                                   new R.IO(services, store, notifier));
-            Map<String, Object> want = R.asMap(sc.get("expect"));
-            boolean ok = Objects.equals(result.get("status"), want.get("status"))
-                    && Objects.equals(result.get("response"), want.get("response"))
-                    && Objects.equals(effects, want.get("effects"));
-            if (ok) {{
-                passed++;
-                System.out.println("ok   {flow.name} " + entry.getKey());
-            }} else {{
-                failed++;
-                System.out.println("FAIL {flow.name} " + entry.getKey() + ": expected " + R.toJson(want)
-                        + ", got " + R.toJson(result) + " with effects " + R.toJson(effects));
-            }}
-        }}
-        return new int[] {{passed, failed}};
-    }}
-
-    public static void main(String[] args) {{
-        System.exit(run()[1] == 0 ? 0 : 1);
-    }}
+@SuppressWarnings("unchecked")
+@TestFactory
+Stream<DynamicTest> scenarios() throws Exception {{
+Map<String, Object> scenarios;
+try (InputStream in = getClass().getResourceAsStream("/scenarios/{flow.name}.json")) {{
+scenarios = JSON.readValue(in, Map.class);
+}}
+return scenarios.entrySet().stream().map(e -> DynamicTest.dynamicTest(e.getKey(), () -> {{
+Map<String, Object> sc = (Map<String, Object>) e.getValue();
+Map<String, Object> mocks = (Map<String, Object>) sc.getOrDefault("mocks", Map.of());
+List<Object> effects = new ArrayList<>();
+Map<String, Integer> attempts = new HashMap<>();
+R.Services services = (service, op, args, step) -> {{
+int n = attempts.merge(step, 1, Integer::sum);
+Object m = mocks.get(step);
+List<Object> outcomes = m instanceof List ? (List<Object>) m : List.of(m);
+Map<String, Object> outcome = (Map<String, Object>) outcomes.get(Math.min(n, outcomes.size()) - 1);
+effects.add("call " + service + "." + op + " #" + n);
+if (outcome.containsKey("ok")) return JSON.convertValue(outcome.get("ok"), Map.class);
+throw new R.ServiceError((String) outcome.get("error"));
+}};
+R.Store store = (entity, op, data) -> effects.add("persist " + entity + "." + op);
+R.Notifier notifier = (channel, to, message) -> effects.add("notify " + channel + " " + to + ": " + message);
+Map<String, Object> input = JSON.convertValue(sc.get("input"), Map.class);
+Map<String, Object> result = R.execute({cls}::{method}, input, new R.IO(services, store, notifier));
+Map<String, Object> want = (Map<String, Object>) sc.get("expect");
+assertEquals(want.get("status"), result.get("status"), "status");
+assertEquals(want.get("response"), result.get("response"), "response");
+assertEquals(want.get("effects"), effects, "effects");
+}}));
+}}
 }}
 '''
 
 
-def _all_tests(pkg, system):
-    runs = '\n'.join(f'        add(totals, {camel(f.name)}Test.run());' for f in system.flows)
+def _app_test(pkg, system):
+    http = [f for f in system.flows if f.trigger().source == 'http']
+    checks = []
+    for f in http:
+        t = f.trigger()
+        scenarios = system.scenarios.get(f.name, {})
+        if not scenarios:
+            continue
+        payload = json.dumps(next(iter(scenarios.values()))['input'])
+        verb = {'GET': 'get', 'POST': 'post', 'PUT': 'put', 'DELETE': 'delete'}[t.config['method']]
+        matcher = 'status().isAccepted()' if f.mode == 'async' else 'status().is(anyOf(equalTo(200), equalTo(422)))'
+        checks.append(f'mvc.perform({verb}({jstr(t.config["path"])}).contentType(MediaType.APPLICATION_JSON)'
+                      f'.content({jstr(payload)})).andExpect({matcher});')
+    body = '\n'.join(checks) or '// no HTTP-triggered flows'
     return f'''package {pkg};
 
-/** Runs every flow's tests. Exit code 0 when all pass. */
-public final class AllTests {{
-    private AllTests() {{}}
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.equalTo;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-    private static void add(int[] totals, int[] r) {{
-        totals[0] += r[0];
-        totals[1] += r[1];
-    }}
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
-    public static void main(String[] args) {{
-        int[] totals = {{0, 0}};
-{runs}
-        System.out.println("passed " + totals[0] + " failed " + totals[1]);
-        System.exit(totals[1] == 0 && totals[0] > 0 ? 0 : 1);
-    }}
+/** The application starts, and every HTTP trigger answers (with the fake services in place). */
+@SpringBootTest
+@AutoConfigureMockMvc
+class ApplicationTests {{
+@Autowired
+private MockMvc mvc;
+
+@Test
+void httpTriggersAnswer() throws Exception {{
+{body}
+}}
 }}
 '''
 
@@ -595,23 +544,25 @@ def _readme(system, pkg):
     lines = [f'# {system.name}', '']
     if system.description:
         lines += [system.description, '']
-    lines += ['Generated by baby-programmer from a Baby Spec. Every flow was verified against the reference',
-              'simulator; `src/test` replays those scenarios, so keep them passing when you edit.',
-              'Java 17 or newer, no dependencies.', '', '## Flows', '']
+    lines += ['A Spring Boot 3 application generated by baby-programmer from a Baby Spec. Every flow was',
+              'verified against the reference simulator; `src/test` replays those scenarios, so keep them',
+              'passing when you edit. Java 17+.', '', '## Flows', '']
     for f in system.flows:
         lines += [f'### {f.name}', '', f'`{trigger_line(f)}`, {f.mode}.', '']
         if f.intent:
             lines += [f.intent, '']
         lines += outline(f) + ['']
-    lines += ['## Run', '', '```bash', './run-tests.sh', './run.sh serve',
-              f"./run.sh run {system.flows[0].name} '{{...}}'", '```', '',
-              'With Maven, `mvn package` builds the jar. The tests are plain Java (no JUnit), so run them',
-              f'with `./run-tests.sh` or `java -cp target/classes:target/test-classes {pkg}.AllTests`.', '',
+    lines += ['## Run', '', '```bash', 'mvn test', 'mvn spring-boot:run            # http://localhost:8080', '```', '',
               '## Connect real systems', '',
-              f'Implement the interfaces in `src/main/java/{pkg}/ports/`, set them on a `Services`, and build',
-              'an `R.IO(services, store, notifier)` in place of `Memory.io()`.', '',
+              'Each outside system is a Spring bean with a stand-in:', '',
+              f'- services: implement the interfaces in `src/main/java/{pkg}/ports/` (the `Fake*` classes in',
+              '  `adapters/` stand in until you do);',
+              '- storage: provide an `R.Store` bean (the stand-in is `InMemoryStore`);',
+              '- notifications: provide an `R.Notifier` bean (the stand-in is `LoggingNotifier`).', '',
+              'Mark your bean `@Primary`, or delete the stand-in.', '',
               'Parallel steps run one after another, in the order written. Integers are Java `int`',
-              '(money in cents) and wrap on overflow, exactly as in the spec.', '']
+              '(money in cents) and wrap on overflow, exactly as in the spec. Scheduled flows use the',
+              'spec\'s cron with a leading seconds field added, as Spring requires.', '']
     return '\n'.join(lines)
 
 
@@ -627,59 +578,74 @@ def generate(system):
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>{SPRING_BOOT}</version>
+    <relativePath/>
+  </parent>
   <groupId>generated</groupId>
   <artifactId>{system.name}</artifactId>
   <version>0.1.0</version>
-  <packaging>jar</packaging>
+  <description>{(system.description or 'Generated by baby-programmer')[:200]}</description>
   <properties>
-    <maven.compiler.release>17</maven.compiler.release>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <java.version>17</java.version>
   </properties>
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
   <build>
     <plugins>
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>3.3.0</version>
-        <configuration>
-          <archive><manifest><mainClass>{pkg}.App</mainClass></manifest></archive>
-        </configuration>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
     </plugins>
   </build>
 </project>
 ''',
         f'{root}/README.md': _readme(system, pkg),
-        f'{root}/run-tests.sh': f'''#!/bin/sh
-# Compile everything and run the generated tests. Needs a JDK (17+).
-set -e
-cd "$(dirname "$0")"
-rm -rf build && mkdir -p build
-javac --release 17 -nowarn -d build $(find src -name '*.java')
-java -cp build {pkg}.AllTests
+        f'{root}/src/main/resources/application.properties': f'spring.application.name={system.name}\nspring.main.banner-mode=off\n',
+        f'{main}/Application.java': f'''package {pkg};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+/** {system.name} - generated by baby-programmer. */
+@SpringBootApplication
+@EnableScheduling
+public class Application {{
+public static void main(String[] args) {{
+SpringApplication.run(Application.class, args);
+}}
+}}
 ''',
-        f'{root}/run.sh': f'''#!/bin/sh
-# ./run.sh serve [port] | run FLOW 'JSON' | event NAME 'JSON' | tick
-set -e
-cd "$(dirname "$0")"
-mkdir -p build
-javac --release 17 -nowarn -d build $(find src/main -name '*.java')
-java -cp build {pkg}.App "$@"
-''',
-        f'{main}/runtime/R.java': (f'package {pkg}.runtime;\n\n{RUNTIME_IMPORTS}\n'
-                                   '/** Shared runtime for the generated flows: results, service calls, 32-bit arithmetic, JSON. */\n'
-                                   f'public final class R {{{RUNTIME_BODY}}}\n'),
+        f'{main}/runtime/R.java': (f'package {pkg}.runtime;\n\nimport java.math.BigInteger;\nimport java.util.*;\n\n'
+                                   '/** Shared runtime for the generated flows: results, service calls, 32-bit arithmetic. */\n'
+                                   f'public final class R {{{RUNTIME}}}\n'),
         f'{main}/Models.java': _models(pkg, namer),
-        f'{main}/Flows.java': _flows_registry(pkg, system),
-        f'{main}/App.java': _app(pkg),
-        f'{main}/adapters/Memory.java': _memory(pkg, system, namer),
-        f'{test}/AllTests.java': _all_tests(pkg, system),
+        f'{test}/ApplicationTests.java': _app_test(pkg, system),
     }
-    for path, content in _ports(pkg, system, namer).items():
+    for path, content in {**_ports(pkg, system, namer), **_adapters(pkg, system, namer), **_events(pkg, system)}.items():
         files[f'{main}/{path}'] = content
-    for path, content in _triggers(pkg, system).items():
-        files[f'{main}/{path}'] = content
+    controller = _controller(pkg, system)
+    if controller:
+        files[f'{main}/web/FlowController.java'] = controller
+    schedule = _schedule(pkg, system)
+    if schedule:
+        files[f'{main}/schedule/ScheduledFlows.java'] = schedule
     for f in system.flows:
-        files[f'{main}/flows/{camel(f.name)}.java'] = _flow_class(pkg, f)
-        files[f'{test}/{camel(f.name)}Test.java'] = _test_class(pkg, f, system.scenarios.get(f.name, {}))
+        files[f'{main}/flows/{camel(f.name)}Flow.java'] = _flow_service(pkg, f)
+        files[f'{test}/flows/{camel(f.name)}FlowTest.java'] = _flow_test(pkg, f)
+        files[f'{root}/src/test/resources/scenarios/{f.name}.json'] = json.dumps(
+            system.scenarios.get(f.name, {}), indent=2) + '\n'
     return files

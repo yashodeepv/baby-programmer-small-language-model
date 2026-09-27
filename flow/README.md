@@ -51,7 +51,8 @@ code generation yet.
 | `spec/compile.py` | spec → IR2 flows, or line-numbered errors (`python3.11 -m flow.spec check FILE`) |
 | `codegen/` | IR2 → Python and JavaScript, verified against the simulator on every test run |
 | `codegen/java.py` | IR2 → Java 17 (typed from the IR2 scope rules), verified with `javac` against the simulator |
-| `codegen/project/` | a whole system → a complete Python, Node.js or Java (Maven layout) project, verified by running its own generated tests |
+| `codegen/project/` | a whole system → a complete Python, Node.js or **Spring Boot** project, verified by running its own generated tests |
+| `codegen/format.py` | each language's formatter (ruff, Prettier, google-java-format), applied before verification |
 | `app/` | **Spec Studio**: paste a spec, get a flowchart, test runs and verified code (`python3.11 -m flow.app`) |
 | `examples/` | hand-written flows, each with scenarios |
 | `tests/` | unit tests |
@@ -66,18 +67,22 @@ python3.11 -m flow.app          # opens http://127.0.0.1:8765
    written after `USE CASE`.
 2. Paste the LLM's reply into the editor and **Build**.
 3. You get the flowchart (the business view), invented test runs covering every
-   path, and Python and JavaScript code, each verified to reproduce every test
-   run exactly like the simulator. Errors point at spec lines.
-4. The **Project** tab holds a complete project per language: typed models, one
-   interface per service, one module per flow, HTTP/event/schedule triggers,
-   in-memory adapters, a CLI, a README and a test suite built from the test runs.
-   It is verified by running that suite inside the project (`python -m unittest`,
-   `node --test`, `javac` + `AllTests`), and downloads as a zip.
+   path, and a **Project** per language: Python, JavaScript (Node.js) and Spring
+   Boot. Each has typed models, one interface per service, one module per flow,
+   HTTP/event/schedule triggers, stand-in adapters, a README and a test suite built
+   from the test runs. Errors point at spec lines.
+4. Each project is formatted with its language's standard formatter (ruff,
+   Prettier, google-java-format), then its own tests run in the background
+   (`python -m unittest`, `node --test`, `mvn test`). The results appear in the
+   summary, and the project downloads as a zip: the formatted files that were tested.
 
-Standard library only for the app itself; verifying JavaScript needs Node.js and
-verifying Java needs a JDK 17+ (found via `JAVA_HOME`, Homebrew's `openjdk`, or `PATH`).
-Generated Java projects have no dependencies; their tests are plain Java (no JUnit),
-run with `./run-tests.sh`, which needs `javac` on `PATH`.
+Standard library only for the app itself. Verifying JavaScript needs Node.js; the
+Spring Boot project needs Maven and a JDK 17+ (its dependencies download on the
+first `mvn test`). Formatters are optional: a missing one leaves the project
+unformatted and says so. Spring Boot flows keep their logic as plain Java in an
+`@Service`; triggers are a `@RestController`, `@Scheduled` methods (the spec's cron
+with a seconds field added) and `@EventListener`s; stand-ins are `@Component`s you
+replace with your own `@Primary` beans.
 Values written as prose need the logic model (not trained yet), so the
 prompt asks the LLM for exact expressions.
 

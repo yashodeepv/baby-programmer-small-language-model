@@ -15,7 +15,7 @@ import os
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from flow.app.pipeline import build, project_zip
+from flow.app.pipeline import build, project_zip, verify_language
 from flow.app.prompt import build_prompt, example_spec
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
@@ -61,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send(404, 'not found', 'text/plain')
 
     def do_POST(self):
-        if self.path not in ('/api/build', '/api/project'):
+        if self.path not in ('/api/build', '/api/project', '/api/verify'):
             return self.send(404, 'not found', 'text/plain')
         n = int(self.headers.get('Content-Length', 0))
         if n > MAX_BODY:
@@ -69,6 +69,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = json.loads(self.rfile.read(n) or b'{}')
             spec = body.get('spec', '')
+            if self.path == '/api/verify':
+                return self.json(verify_language(spec, body.get('language', 'python')))
             if self.path == '/api/project':
                 lang = body.get('language', 'python')
                 data, system = project_zip(spec, lang)

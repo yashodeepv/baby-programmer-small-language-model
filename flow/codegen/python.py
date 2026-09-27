@@ -186,7 +186,7 @@ def expr(e, ref=local_ref):
             cond = {'even': ' if v % 2 == 0', 'odd': ' if v % 2 != 0', 'gt': f' if v > {k}',
                     'lt': f' if v < {k}', 'divk': f' if {k} != 0 and v % {k} == 0'}[kind]
         if m == 'v' and not cond and not isinstance(e, Loop):
-            return f'_reduce({e.op!r}, {src})'
+            return f'len({src})' if e.op == 'count' else f'_reduce({e.op!r}, {src})'
         return f'_reduce({e.op!r}, [{m} for v in {src}{cond}])'
     if isinstance(e, Invalid):
         raise ValueError(f'expression {e.text!r} is not compiled yet ({e.error})')

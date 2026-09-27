@@ -276,13 +276,35 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
       if (last.spec && last.spec !== spec.value) { spec.value = last.spec; }
       flowIdx = 0; selStep = null;
       runIdx = longestRun(last.flows?.[0]);
-      if (tab !== 'flowchart' && !(last.flows?.[0]?.code?.python)) tab = 'flowchart';
+      if (tab === 'project' && !Object.keys(last.project || {}).length) tab = 'flowchart';
       render();
+      verifyAll(last);
     } catch (e) {
       $('results').innerHTML = `<div class="fatal">Couldn't reach the backend: ${esc(e.message)}. Is <code>python3.11 -m flow.app</code> still running?</div>`;
     } finally { btn.disabled = false; btn.textContent = 'Build'; }
   }
   $('build').addEventListener('click', doBuild);
+
+  const LANGS = [['python', 'Python'], ['javascript', 'JavaScript'], ['java', 'Spring Boot']];
+
+  // Each project's own test suite runs after the build, one language at a time;
+  // results fill in as they arrive. A newer build makes older results irrelevant.
+  async function verifyAll(build) {
+    for (const [lang] of LANGS) {
+      const proj = (build.project || {})[lang];
+      if (!proj) continue;
+      proj.verification = { status: 'running' };
+      if (build === last) render();
+      try {
+        const r = await fetch('/api/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                               body: JSON.stringify({ spec: build.spec, language: lang }) });
+        proj.verification = await r.json();
+      } catch (e) {
+        proj.verification = { status: 'not verified', detail: e.message, passed: 0, total: 0 };
+      }
+      if (build === last) render();
+    }
+  }
 
   function renderIssues() {
     const box = $('issues');
@@ -309,19 +331,20 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
       return;
     }
     const f = last.flows[flowIdx];
-    const v = f.verification || {};
     const chips = [];
     chips.push(last.errors.length ? `<span class="chip err">${last.errors.length} error(s)</span>` : `<span class="chip ok">compiled</span>`);
     chips.push(`<span class="chip">${f.mode}</span>`, `<span class="chip">${f.steps.length} steps</span>`);
     if (f.runs.length) chips.push(`<span class="chip ${f.coverage === 1 ? 'ok' : 'warn'}">${f.runs.length} test runs · ${Math.round(f.coverage * 100)}% of paths</span>`);
-    for (const [lang, rep] of Object.entries(v)) {
-      const cls = rep.status === 'verified' ? 'ok' : rep.status === 'mismatch' ? 'err' : 'warn';
-      chips.push(`<span class="chip ${cls}">${lang} ${rep.status === 'verified' ? `verified ${rep.passed}/${rep.total}` : rep.status}</span>`);
+    for (const [lang, label] of LANGS) {
+      const rep = (last.project || {})[lang]?.verification;
+      if (!rep) continue;
+      const cls = { verified: 'ok', failed: 'err', running: '' }[rep.status] ?? 'warn';
+      const text = rep.status === 'verified' ? `tests pass ${rep.passed}/${rep.total}` : rep.status === 'running' ? 'testing…' : rep.status;
+      chips.push(`<span class="chip ${cls}">${label} ${text}</span>`);
     }
     const picker = last.flows.length > 1 ? `<select class="btn" id="flowpick">${last.flows.map((x, i) =>
       `<option value="${i}" ${i === flowIdx ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : `<span class="chip">${esc(f.name)}</span>`;
-    const tabs = [['flowchart', 'Flowchart'], ['runs', 'Test runs', f.runs.length], ['python', 'Python', badge(v.python)],
-                  ['javascript', 'JavaScript', badge(v.javascript)], ['java', 'Java', badge(v.java)],
+    const tabs = [['flowchart', 'Flowchart'], ['runs', 'Test runs', f.runs.length],
                   ['project', 'Project', badge((last.project || {})[projLang]?.verification)], ['ir2', 'IR2']];
     res.innerHTML = `<div class="summary"><span class="sys">${esc(last.system)}</span>${picker}${chips.join('')}</div>
       ${last.description ? `<p class="desc">${esc(last.description)}</p>` : ''}
@@ -331,14 +354,14 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
     res.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.t; render(); }));
     const fp = $('flowpick');
     if (fp) fp.addEventListener('change', () => { flowIdx = +fp.value; runIdx = longestRun(last.flows[flowIdx]); selStep = null; render(); });
-    ({ flowchart: paneFlow, runs: paneRuns, python: paneCode, javascript: paneCode, java: paneCode, project: paneProject, ir2: paneIR })[tab](f);
+    ({ flowchart: paneFlow, runs: paneRuns, project: paneProject, ir2: paneIR })[tab](f);
   }
   // Open on the run that walks the most of the flow, so the chart isn't mostly greyed out.
   function longestRun(f) {
     if (!f || !f.runs || !f.runs.length) return 0;
     return f.runs.reduce((best, r, i) => (r.path.length > f.runs[best].path.length ? i : best), 0);
   }
-  const badge = (rep) => !rep ? '' : rep.status === 'verified' ? '✓' : (rep.status === 'mismatch' || rep.status === 'failed') ? '✗' : '?';
+  const badge = (rep) => !rep ? '' : { verified: '✓', failed: '✗', running: '…' }[rep.status] ?? '?';
 
   function blocked(f) { return f.blocked ? `<div class="blocked">${esc(f.blocked)}</div>` : ''; }
 
@@ -446,24 +469,6 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
     $('pane').querySelectorAll('.run').forEach((b) => b.addEventListener('click', () => { runIdx = +b.dataset.i; paneRuns(f); }));
   }
 
-  // ---------------------------------------------------------------- code
-  function paneCode(f) {
-    const lang = tab, code = f.code[lang], rep = (f.verification || {})[lang];
-    if (!code) { $('pane').innerHTML = blocked(f) || '<div class="empty">No code.</div>'; return; }
-    const verdict = rep.status === 'verified'
-      ? `<div class="verdict verified"><b>Verified.</b> This code reproduces all ${rep.total} test runs exactly like the reference simulator: same result, same response, same calls, saves and messages in the same order.</div>`
-      : rep.status === 'mismatch' ? `<div class="verdict mismatch"><b>Mismatch</b> on ${rep.total - rep.passed} of ${rep.total} test runs. ${esc(rep.detail)}</div>`
-      : `<div class="verdict notverified"><b>Not verified:</b> ${esc(rep.detail)}.</div>`;
-    const javaClass = f.name.split('_').filter(Boolean).map((p) => p[0].toUpperCase() + p.slice(1)).join('');
-    const file = lang === 'python' ? `${f.name}.py` : lang === 'javascript' ? `${f.name}.mjs` : `${javaClass}.java`;
-    $('pane').innerHTML = `${verdict}<div class="row" style="margin-bottom:8px"><button class="btn" id="copy-code">Copy</button>
-      <button class="btn" id="dl-code">Download ${esc(file)}</button><span class="hint" id="code-status"></span></div><pre class="code">${esc(code)}</pre>`;
-    $('copy-code').addEventListener('click', async () => { await navigator.clipboard.writeText(code); $('code-status').textContent = 'Copied.'; });
-    $('dl-code').addEventListener('click', () => {
-      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([code], { type: 'text/plain' })); a.download = file; a.click();
-    });
-  }
-
   // ---------------------------------------------------------------- project
   function paneProject(f) {
     const proj = (last.project || {})[projLang];
@@ -473,12 +478,15 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
     }
     const paths = Object.keys(proj.files).sort();
     if (!projFile || !(projFile in proj.files)) projFile = paths.find((p) => /\/flows\/[^/]+\.(py|js|java)$/.test(p) && !/(__init__|index)/.test(p)) || paths[0];
-    const rep = proj.verification;
-    const runner = { python: 'python -m unittest', javascript: 'node --test', java: 'javac + AllTests' }[projLang];
+    const rep = proj.verification || { status: 'running' };
+    const runner = { python: 'python -m unittest', javascript: 'node --test', java: 'mvn test' }[projLang];
     const verdict = rep.status === 'verified'
       ? `<div class="verdict verified"><b>Project tests pass: ${rep.passed}/${rep.total}.</b> The generated test suite was run inside the project with <code>${runner}</code>. It replays every test run, so keep it passing when you edit.</div>`
+      : rep.status === 'running' ? `<div class="verdict notverified">Running the project's tests with <code>${runner}</code>…</div>`
       : rep.status === 'failed' ? `<div class="verdict mismatch"><b>Project tests failed</b> (${rep.passed}/${rep.total}).<pre class="code" style="margin-top:8px">${esc(rep.detail)}</pre></div>`
       : `<div class="verdict notverified"><b>Not verified:</b> ${esc(rep.detail)}.</div>`;
+    const fmt = proj.format || {};
+    const fmtNote = fmt.status === 'formatted' ? `formatted with ${esc(fmt.tool)}` : `not formatted (${esc(fmt.detail || 'no formatter')})`;
     let tree = '', lastDir = null;
     for (const p of paths) {
       const i = p.lastIndexOf('/'), dir = p.slice(0, i), name = p.slice(i + 1);
@@ -490,10 +498,10 @@ pre.code { margin: 0; padding: 12px; background: var(--sunk); border: 1px solid 
         <div class="seg" role="group" aria-label="Language">
           <button data-l="python" aria-pressed="${projLang === 'python'}">Python</button>
           <button data-l="javascript" aria-pressed="${projLang === 'javascript'}">JavaScript</button>
-          <button data-l="java" aria-pressed="${projLang === 'java'}">Java</button>
+          <button data-l="java" aria-pressed="${projLang === 'java'}">Spring Boot</button>
         </div>
         <button class="btn primary" id="dl-proj">Download .zip</button>
-        <span class="hint">${paths.length} files</span><span class="hint" id="proj-status"></span>
+        <span class="hint">${paths.length} files · ${fmtNote}</span><span class="hint" id="proj-status"></span>
       </div>
       <div class="proj"><nav class="tree" aria-label="Project files">${tree}</nav>
         <div><div class="hint" style="margin-bottom:6px"><code>${esc(projFile)}</code></div><pre class="code">${esc(proj.files[projFile])}</pre></div></div>`;

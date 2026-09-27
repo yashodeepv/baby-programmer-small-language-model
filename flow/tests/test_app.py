@@ -2,7 +2,7 @@
 
 import unittest
 
-from flow.app.pipeline import build, strip_fences
+from flow.app.pipeline import build, strip_fences, verify_language
 from flow.app.prompt import build_prompt, example_spec
 from flow.spec import compile_spec
 
@@ -33,12 +33,12 @@ class Pipeline(unittest.TestCase):
         f = r['flows'][0]
         self.assertEqual(f['coverage'], 1.0)
         self.assertGreater(len(f['runs']), 2)
-        self.assertEqual(f['verification']['python']['status'], 'verified')
-        self.assertIn('def run(', f['code']['python'])
-        self.assertIn('export async function run(', f['code']['javascript'])
         self.assertTrue(all(s['line'] > 0 for s in f['steps']))
-        self.assertEqual(r['project']['python']['verification']['status'], 'verified')
+        self.assertEqual(set(r['project']), {'python', 'javascript', 'java'})
         self.assertIn('leave-desk/pyproject.toml', r['project']['python']['files'])
+        self.assertIn('leave-desk/pom.xml', r['project']['java']['files'])
+        self.assertIn('spring-boot-starter-web', r['project']['java']['files']['leave-desk/pom.xml'])
+        self.assertEqual(verify_language(f'```markdown\n{example_spec()}```', 'python')['status'], 'verified')
 
     def test_build_reports_errors_with_lines(self):
         r = build(example_spec().replace('Retry 2 times', 'Retry 8 times'))
@@ -52,7 +52,7 @@ class Pipeline(unittest.TestCase):
         self.assertTrue(r['ok'])
         self.assertEqual(len(r['intents']), 1)
         self.assertIn('logic model', r['flows'][0]['blocked'])
-        self.assertEqual(r['flows'][0]['code'], {})
+        self.assertEqual(r['project'], {})
 
 
 if __name__ == '__main__':

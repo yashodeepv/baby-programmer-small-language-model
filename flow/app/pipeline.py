@@ -3,17 +3,17 @@
     spec text (as pasted, code fences and chatter allowed)
       -> compile (flow/spec)          errors with lines, or IR2 flows
       -> test runs (flow/gen/coverage) invented inputs until every edge is taken
-      -> code (flow/codegen)          Python and JavaScript
-      -> verify                       the code replays every test run like the simulator
+      -> projects (flow/codegen)      Python, JavaScript and Spring Boot, each formatted
+      -> verify (on request)          each project's own test suite, in its own language
 """
 
+import hashlib
 import random
 import re
+from collections import OrderedDict
 
-from flow.codegen import to_javascript, to_python
-from flow.codegen.java import to_java
+from flow.codegen.format import format_project
 from flow.codegen.project import System, generate, verify_project
-from flow.codegen.verify import verify
 from flow.gen.coverage import synthesize
 from flow.gen.order import canonical_order
 from flow.ir2 import graph as g
@@ -165,7 +165,7 @@ def build(text, seed=0):
                        'logic': _logic(s)} for s in flow.steps],
             'edges': [{'src': e.src, 'dst': e.dst, 'on': e.on} for e in flow.edges],
             'ir2': dump_flow(flow),
-            'runs': [], 'coverage': None, 'code': {}, 'verification': {},
+            'runs': [], 'coverage': None,
         }
         pending = [i for i in res.intents if i.flow == flow.name]
         if res.errors:
@@ -183,23 +183,55 @@ def build(text, seed=0):
                                      'status': r.status, 'response': r.response, 'error': r.error,
                                      'path': r.path(), 'edges': [list(e) for e in r.edges],
                                      'effects': [summary(e) for e in r.effects]})
-            item['code'] = {'python': to_python(flow), 'javascript': to_javascript(flow), 'java': to_java(flow)}
-            item['verification'] = verify(flow, scenarios.values())
         out['flows'].append(item)
     out['project'] = {}
     if res.flows and len(all_scenarios) == len(res.flows):
         system = System(res.system, res.description, res.flows, all_scenarios)
-        for lang in ('python', 'javascript', 'java'):
-            files = generate(system, lang)
-            out['project'][lang] = {'files': files, 'verification': verify_project(files, lang)}
+        for lang in LANGUAGES:
+            files, fmt = format_project(generate(system, lang), lang)
+            _remember(spec, lang, files)
+            out['project'][lang] = {'files': files, 'format': fmt, 'verification': None}
     return out
+
+
+LANGUAGES = ('python', 'javascript', 'java')
+
+# The last few generated projects, so verifying or downloading one doesn't
+# regenerate and reformat it. Generation is deterministic, so a miss is only slower.
+_CACHE = OrderedDict()
+
+
+def _key(spec, lang):
+    return hashlib.sha256(spec.encode()).hexdigest(), lang
+
+
+def _remember(spec, lang, files):
+    _CACHE[_key(spec, lang)] = files
+    while len(_CACHE) > 12:
+        _CACHE.popitem(last=False)
+
+
+def project_files(text, language, seed=0):
+    """(files, system name) for a spec, or (None, name) if it doesn't build cleanly."""
+    spec = strip_fences(text)
+    files = _CACHE.get(_key(spec, language))
+    if files is not None:
+        return files, next(iter(files)).split('/')[0]
+    result = build(text, seed)
+    project = result.get('project', {}).get(language)
+    return (project['files'] if project else None), result['system']
+
+
+def verify_language(text, language):
+    """Run the generated project's own test suite."""
+    files, _ = project_files(text, language)
+    if files is None:
+        return {'status': 'not verified', 'passed': 0, 'total': 0, 'detail': 'build the spec without errors first'}
+    return verify_project(files, language)
 
 
 def project_zip(text, language, seed=0):
     """The generated project as a zip, or None if the spec doesn't build cleanly."""
     from flow.codegen.project import zip_bytes
-    result = build(text, seed)
-    project = result.get('project', {}).get(language)
-    if not project:
-        return None, result['system']
-    return zip_bytes(project['files']), result['system']
+    files, system = project_files(text, language, seed)
+    return (zip_bytes(files) if files else None), system

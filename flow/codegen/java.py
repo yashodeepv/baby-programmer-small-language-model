@@ -188,6 +188,11 @@ RUNTIME_BODY = r'''
         }
     }
 
+    public static int sum(List<Object> xs) { return reduce("sum", xs, null, 0, null, 0); }
+    public static int product(List<Object> xs) { return reduce("product", xs, null, 0, null, 0); }
+    public static int min(List<Object> xs) { return reduce("min", xs, null, 0, null, 0); }
+    public static int max(List<Object> xs) { return reduce("max", xs, null, 0, null, 0); }
+
     /** sum / product / count / min / max over a list, with an optional filter then map. */
     public static int reduce(String op, List<Object> xs, String map, int k, String pred, int pk) {
         if (op.equals("count") && map == null && pred == null) return xs.size();   // any elements, even records
@@ -447,8 +452,10 @@ class _Expr:
         if isinstance(e, Pluck):
             return f'R.pluck({C(e.a)}, {jstr(e.field)})'
         if isinstance(e, Fmt):
-            return '("" + ' + ' + '.join(jstr(p.v) if isinstance(p, Str) else f'R.fmt({C(p)})'
-                                         for p in e.parts) + ')'
+            parts = [jstr(p.v) if isinstance(p, Str) else C(p) for p in e.parts]
+            if not isinstance(e.parts[0], Str):
+                parts.insert(0, '""')               # so leading numbers concatenate, not add
+            return '(' + ' + '.join(parts) + ')'
         if isinstance(e, Arr):
             return 'R.list(' + ', '.join(C(x) for x in e.items) + ')'
         if isinstance(e, Index):
@@ -460,12 +467,27 @@ class _Expr:
                 src = f'R.range({C(e.lo)}, {C(e.hi)})'
             else:
                 src = C(e.arr)
+            if not e.mapf and not e.pred:
+                return f'{src}.size()' if e.op == 'count' else f'R.{e.op}({src})'
             pred, pk = (e.pred if e.pred else (None, 0))
             return (f'R.reduce({jstr(e.op)}, {src}, {jstr(e.mapf) if e.mapf else "null"}, {e.k}, '
                     f'{jstr(pred) if pred else "null"}, {pk})')
         if isinstance(e, Invalid):
             raise ValueError(f'expression {e.text!r} is not compiled yet ({e.error})')
         raise TypeError(f'java: cannot compile {e!r}')
+
+
+def bare(code):
+    """Drop one pair of parentheses that wraps the whole expression."""
+    if not (code.startswith('(') and code.endswith(')')):
+        return code
+    depth = 0
+    for i, c in enumerate(code):
+        depth += c == '('
+        depth -= c == ')'
+        if depth == 0 and i < len(code) - 1:
+            return code                         # the first paren closes early: (a) + (b)
+    return code[1:-1]
 
 
 def _record(d, X):
@@ -514,7 +536,7 @@ class _Printer:
                     X = self.X(s)
                     P(f'io.notifier.notify({jstr(s.channel)}, {X(s.to)}, {X(s.message)});')
             elif isinstance(st, Check):
-                P(f'if (!({self.X(s)(s.rule)})) {{')
+                P(f'if (!({bare(self.X(s)(s.rule))})) {{')
                 if st.on_fail is None:
                     P(f'    throw new R.Failed({jstr(s.id + ": " + (s.message or "validation failed"))});')
                 else:
@@ -535,7 +557,7 @@ class _Printer:
                 then, orelse, neg = st.then, st.orelse, st.negate
                 if not then:
                     then, orelse, neg = orelse, [], not neg
-                cond = self.X(s)(s.cond)
+                cond = bare(self.X(s)(s.cond))
                 P(f'if (!({cond})) {{' if neg else f'if ({cond}) {{')
                 out += self.body(then, pad + '    ')
                 if orelse:

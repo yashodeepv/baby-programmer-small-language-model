@@ -5,8 +5,14 @@ import unittest
 
 from flow.app.pipeline import FlowHints
 from flow.app.prompt import example_spec
+from flow.codegen.format import format_project
 from flow.codegen.project import System, generate, verify_project, zip_bytes
-from flow.codegen.verify import java_tools, node_available
+from flow.codegen.verify import node_available
+
+
+def maven():
+    import shutil
+    return shutil.which('mvn') is not None
 from flow.gen.coverage import synthesize
 from flow.spec import compile_spec
 
@@ -45,25 +51,37 @@ class Projects(unittest.TestCase):
         self.assertIn('export async function order_checkout(request, io)',
                       files['shop-orders/src/flows/order_checkout.js'])
 
-    def test_java_layout(self):
+    def test_java_is_a_spring_boot_project(self):
         files = generate(system_from(checkout()), 'java')
-        for path in ['pom.xml', 'README.md', 'run-tests.sh', 'src/main/java/shop_orders/runtime/R.java',
-                     'src/main/java/shop_orders/Models.java', 'src/main/java/shop_orders/ports/Payments.java',
-                     'src/main/java/shop_orders/flows/OrderCheckout.java',
-                     'src/main/java/shop_orders/triggers/HttpTrigger.java',
-                     'src/test/java/shop_orders/OrderCheckoutTest.java']:
-            self.assertIn(f'shop-orders/{path}', files)
+        base = 'shop-orders/src/main/java/shop_orders'
+        for path in ['shop-orders/pom.xml', 'shop-orders/README.md', f'{base}/Application.java',
+                     f'{base}/runtime/R.java', f'{base}/Models.java', f'{base}/ports/Payments.java',
+                     f'{base}/ports/ServiceRouter.java', f'{base}/adapters/FakePayments.java',
+                     f'{base}/flows/OrderCheckoutFlow.java', f'{base}/web/FlowController.java',
+                     'shop-orders/src/test/java/shop_orders/flows/OrderCheckoutFlowTest.java',
+                     'shop-orders/src/test/resources/scenarios/order_checkout.json']:
+            self.assertIn(path, files)
+        self.assertIn('spring-boot-starter-web', files['shop-orders/pom.xml'])
+        self.assertIn('@SpringBootApplication', files[f'{base}/Application.java'])
+        self.assertIn('@PostMapping("/orders")', files[f'{base}/web/FlowController.java'])
+        self.assertIn('@Service', files[f'{base}/flows/OrderCheckoutFlow.java'])
         self.assertIn('Models.PaymentsChargeResult charge(String order_id, int amount)',
-                      files['shop-orders/src/main/java/shop_orders/ports/Payments.java'])
+                      files[f'{base}/ports/Payments.java'])
+
+    def test_spring_cron_gets_a_seconds_field(self):
+        from flow.codegen.project.java_project import spring_cron
+        self.assertEqual(spring_cron('0 6 * * *'), '0 0 6 * * *')
 
     def test_generated_test_suites_pass(self):
         for text in (checkout(), example_spec()):
             system = system_from(text)
             for lang in ('python', 'javascript', 'java'):
-                if (lang == 'javascript' and not node_available()) or (lang == 'java' and not java_tools()):
+                if (lang == 'javascript' and not node_available()) or (lang == 'java' and not maven()):
                     continue
                 with self.subTest(system=system.name, lang=lang):
-                    rep = verify_project(generate(system, lang), lang)
+                    # formatted first: the files a user downloads are the files tested
+                    files, fmt = format_project(generate(system, lang), lang)
+                    rep = verify_project(files, lang)
                     self.assertEqual(rep['status'], 'verified', rep['detail'])
                     self.assertGreater(rep['total'], 2)
 
