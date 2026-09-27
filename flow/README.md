@@ -46,6 +46,8 @@ code generation yet.
 | `gen/labels.py` | flow-encoder labels; logic-model examples, anonymised |
 | `gen/curriculum.py` | the book: seven chapters, one new idea each |
 | `gen/build.py` | builds the corpus: sample → check → cover → render → label |
+| `spec/LANGUAGE.md` | **Baby Spec**: the system spec language an analyst writes and baby-programmer reads |
+| `spec/examples/` | example system specs |
 | `examples/` | hand-written flows, each with scenarios |
 | `tests/` | unit tests |
 
