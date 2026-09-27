@@ -56,6 +56,21 @@ class Projects(unittest.TestCase):
                     self.assertEqual(rep['status'], 'verified', rep['detail'])
                     self.assertGreater(rep['total'], 2)
 
+    def test_a_system_with_several_flows_is_one_project(self):
+        extra = ('\n## Flow: cancel_leave\nTrigger: event leave_cancelled with employee_id str, '
+                 'manager_email str, days int\nMode: async\nSteps:\n'
+                 '1. [Remove the request] Delete leave_request where employee_id.\n'
+                 '2. [Tell the manager] Email manager_email: "{employee_id} cancelled {days} days".\n')
+        system = system_from(example_spec() + extra)
+        for lang in ('python', 'javascript'):
+            if lang == 'javascript' and not node_available():
+                continue
+            files = generate(system, lang)
+            with self.subTest(lang=lang):
+                self.assertEqual(len([p for p in files if '/flows/' in p and ('cancel' in p or 'request_leave' in p)]), 2)
+                rep = verify_project(files, lang)
+                self.assertEqual(rep['status'], 'verified', rep['detail'])
+
     def test_generated_tests_catch_a_bug(self):
         files = generate(system_from(checkout()), 'python')
         path = 'shop-orders/src/shop_orders/flows/order_checkout.py'
