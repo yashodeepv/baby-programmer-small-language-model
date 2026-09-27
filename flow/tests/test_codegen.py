@@ -69,6 +69,19 @@ class Codegen(unittest.TestCase):
             with self.subTest(flow=f.name):
                 self.check_flow(f, scenarios)
 
+    def test_every_sampled_flow_structures_and_the_fallback_still_verifies(self):
+        from flow.codegen.structure import structure
+        rng = random.Random(7)
+        for f, meta in sample_flows(120, CATS, seed=8):
+            structure(f)                                  # raises if it can't
+        for f, meta in list(sample_flows(20, CATS, seed=9)):
+            scenarios, _ = synthesize(rng, f, CATS[meta['catalog']])
+            with self.subTest(flow=f.name):
+                rep = verify(f, scenarios.values(), style='machine')
+                self.assertEqual(rep['python']['status'], 'verified', rep['python']['detail'])
+                if node_available():
+                    self.assertEqual(rep['javascript']['status'], 'verified', rep['javascript']['detail'])
+
     def test_arithmetic_edge_cases(self):
         rng = random.Random(4)
         big = [-2147483648, 2147483647, -1, 0, 1, 46341, -46341, 99999, 3, 102]

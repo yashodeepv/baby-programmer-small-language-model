@@ -100,7 +100,7 @@ def run_javascript(code, scenarios):
         return json.loads(p.stdout)
 
 
-def verify(flow, scenarios, languages=('python', 'javascript')):
+def verify(flow, scenarios, languages=('python', 'javascript'), style='auto'):
     """{language: {'status': 'verified' | 'mismatch' | 'not verified', 'passed', 'total', 'detail'}}"""
     scenarios = list(scenarios)
     want = reference(flow, scenarios)
@@ -111,7 +111,7 @@ def verify(flow, scenarios, languages=('python', 'javascript')):
                             'detail': 'Node.js is not installed'}
             continue
         try:
-            code = to_python(flow) if lang == 'python' else to_javascript(flow)
+            code = to_python(flow, style) if lang == 'python' else to_javascript(flow, style)
             got = run_python(code, scenarios) if lang == 'python' else run_javascript(code, scenarios)
         except Exception as e:
             report[lang] = {'status': 'mismatch', 'passed': 0, 'total': len(scenarios), 'detail': str(e)}

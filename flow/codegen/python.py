@@ -164,7 +164,9 @@ def expr(e, ref=local_ref):
     if isinstance(e, Pluck):
         return f'[r[{e.field!r}] for r in {E(e.a)}]'
     if isinstance(e, Fmt):
-        return "''.join([" + ', '.join(f'_fmt({E(p)})' for p in e.parts) + '])'
+        # literal text stays a plain string; only values go through _fmt
+        return "''.join([" + ', '.join(repr(p.v) if isinstance(p, Str) else f'_fmt({E(p)})'
+                                       for p in e.parts) + '])'
     if isinstance(e, Arr):
         return '[' + ', '.join(E(x) for x in e.items) + ']'
     if isinstance(e, Index):
@@ -183,6 +185,8 @@ def expr(e, ref=local_ref):
             kind, k = e.pred
             cond = {'even': ' if v % 2 == 0', 'odd': ' if v % 2 != 0', 'gt': f' if v > {k}',
                     'lt': f' if v < {k}', 'divk': f' if {k} != 0 and v % {k} == 0'}[kind]
+        if m == 'v' and not cond and not isinstance(e, Loop):
+            return f'_reduce({e.op!r}, {src})'
         return f'_reduce({e.op!r}, [{m} for v in {src}{cond}])'
     if isinstance(e, Invalid):
         raise ValueError(f'expression {e.text!r} is not compiled yet ({e.error})')
