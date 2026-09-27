@@ -1,0 +1,44 @@
+{
+  "name": "ecommerce",
+  "triggers": [
+    {"source": "http", "config": {"method": "POST", "path": "/orders"}, "noun": "order",
+     "payload": {"order_id": "str", "customer_email": "str", "tier": "str", "country": "str",
+                 "coupon": "str", "items": ["list", {"sku": "str", "amount": "int", "qty": "int"}]}},
+    {"source": "event", "config": {"name": "order_returned"}, "noun": "return",
+     "payload": {"order_id": "str", "customer_email": "str", "refund_amount": "int",
+                 "reason": "str", "days_since_delivery": "int"}}
+  ],
+  "services": {
+    "payments": {
+      "charge": {"input": {"order_id": "str", "amount": "int"},
+                 "output": {"charge_id": "str", "status": "str"}},
+      "refund": {"input": {"order_id": "str", "amount": "int"},
+                 "output": {"refund_id": "str"}}
+    },
+    "inventory": {
+      "reserve": {"input": {"order_id": "str", "units": "int"},
+                  "output": {"reservation_id": "str", "backordered": "int"}}
+    },
+    "fraud": {
+      "score": {"input": {"customer_email": "str", "amount": "int"},
+                "output": {"risk": "int", "flagged": "bool"}}
+    }
+  },
+  "entities": {
+    "order": {"order_id": "str", "total": "int", "status": "str"},
+    "refund": {"order_id": "str", "amount": "int", "reason": "str"}
+  },
+  "strings": {
+    "tier": ["gold", "silver", "standard"],
+    "country": ["US", "DE", "IN", "BR"],
+    "coupon": ["", "SAVE10", "VIP"],
+    "reason": ["damaged", "late", "unwanted"],
+    "status": ["paid", "pending", "failed"]
+  },
+  "ints": {
+    "amount": [100, 200000], "qty": [1, 5], "refund_amount": [100, 50000],
+    "days_since_delivery": [0, 60], "risk": [0, 100], "backordered": [0, 3], "units": [1, 20]
+  },
+  "recipients": {"slack": ["#sales", "#fraud", "#ops"], "email": ["ops@shop.example"],
+                 "sms": ["+15550100"]}
+}

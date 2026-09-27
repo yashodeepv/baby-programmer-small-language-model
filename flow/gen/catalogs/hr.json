@@ -1,0 +1,40 @@
+{
+  "name": "hr",
+  "triggers": [
+    {"source": "http", "config": {"method": "POST", "path": "/leave-requests"}, "noun": "leave request",
+     "payload": {"employee_id": "str", "employee_email": "str", "manager_email": "str",
+                 "days": "int", "balance": "int", "kind": "str", "tenure_months": "int"}},
+    {"source": "event", "config": {"name": "employee_hired"}, "noun": "hire",
+     "payload": {"employee_id": "str", "name": "str", "email": "str", "department": "str",
+                 "salary": "int", "start_day": "int"}}
+  ],
+  "services": {
+    "hris": {
+      "get_employee": {"input": {"employee_id": "str"},
+                       "output": {"department": "str", "level": "int", "active": "bool"}}
+    },
+    "payroll": {
+      "enroll": {"input": {"employee_id": "str", "salary": "int"}, "output": {"payroll_id": "str"}}
+    },
+    "it": {
+      "provision": {"input": {"email": "str", "department": "str"},
+                    "output": {"laptop_id": "str", "ready": "bool"}}
+    }
+  },
+  "entities": {
+    "leave_request": {"employee_id": "str", "days": "int", "status": "str"},
+    "onboarding": {"employee_id": "str", "department": "str", "salary": "int"}
+  },
+  "strings": {
+    "kind": ["vacation", "sick", "parental"],
+    "department": ["engineering", "sales", "finance"],
+    "status": ["approved", "pending", "rejected"],
+    "name": ["Ana", "Raj", "Mei"]
+  },
+  "ints": {
+    "days": [1, 30], "balance": [0, 40], "tenure_months": [0, 120], "salary": [30000, 250000],
+    "level": [1, 8], "start_day": [1, 28]
+  },
+  "recipients": {"slack": ["#people", "#it-help"], "email": ["hr@corp.example"],
+                 "sms": ["+15550142"]}
+}

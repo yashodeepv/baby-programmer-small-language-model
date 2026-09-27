@@ -1,0 +1,39 @@
+{
+  "name": "logistics",
+  "triggers": [
+    {"source": "event", "config": {"name": "shipment_scanned"}, "noun": "scan",
+     "payload": {"shipment_id": "str", "customer_email": "str", "carrier": "str",
+                 "weight_grams": "int", "distance_km": "int", "delay_hours": "int", "priority": "bool"}},
+    {"source": "http", "config": {"method": "POST", "path": "/pickups"}, "noun": "pickup",
+     "payload": {"pickup_id": "str", "contact_email": "str", "zone": "str",
+                 "parcels": ["list", {"parcel_id": "str", "weight_grams": "int"}]}}
+  ],
+  "services": {
+    "carrier": {
+      "book": {"input": {"shipment_id": "str", "weight_grams": "int"},
+               "output": {"booking_id": "str", "eta_hours": "int"}}
+    },
+    "routing": {
+      "plan": {"input": {"distance_km": "int", "zone": "str"},
+               "output": {"route_id": "str", "stops": "int"}}
+    },
+    "tracking": {
+      "update": {"input": {"shipment_id": "str", "status": "str"}, "output": {"ok": "bool"}}
+    }
+  },
+  "entities": {
+    "shipment": {"shipment_id": "str", "status": "str", "eta_hours": "int"},
+    "pickup": {"pickup_id": "str", "parcels": "int", "weight_grams": "int"}
+  },
+  "strings": {
+    "carrier": ["dhl", "ups", "local"],
+    "zone": ["north", "south", "central"],
+    "status": ["in_transit", "delayed", "delivered"]
+  },
+  "ints": {
+    "weight_grams": [100, 30000], "distance_km": [1, 2000], "delay_hours": [0, 72],
+    "eta_hours": [1, 96], "stops": [1, 12], "parcels": [0, 10]
+  },
+  "recipients": {"slack": ["#dispatch", "#ops"], "email": ["dispatch@freight.example"],
+                 "sms": ["+15550177"]}
+}

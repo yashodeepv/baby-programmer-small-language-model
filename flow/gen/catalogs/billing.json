@@ -1,0 +1,42 @@
+{
+  "name": "billing",
+  "triggers": [
+    {"source": "schedule", "config": {"cron": "0 6 * * *"}, "noun": "run",
+     "payload": {"run_date": "str"}},
+    {"source": "http", "config": {"method": "POST", "path": "/invoices"}, "noun": "invoice",
+     "payload": {"invoice_id": "str", "customer": "str", "customer_email": "str", "amount": "int",
+                 "days_late": "int", "plan": "str",
+                 "lines": ["list", {"description": "str", "amount": "int"}]}}
+  ],
+  "services": {
+    "billing": {
+      "list_overdue": {"input": {"as_of": "str"},
+                       "output": {"invoices": ["list", {"invoice_id": "str", "customer": "str",
+                                                        "amount": "int", "days_late": "int"}]}},
+      "send_invoice": {"input": {"invoice_id": "str", "amount": "int"},
+                       "output": {"sent": "bool"}}
+    },
+    "tax": {
+      "quote": {"input": {"amount": "int", "region": "str"}, "output": {"tax": "int"}}
+    },
+    "ledger": {
+      "post": {"input": {"invoice_id": "str", "amount": "int"}, "output": {"entry_id": "str"}}
+    }
+  },
+  "entities": {
+    "run_log": {"run_date": "str", "overdue": "int", "owed": "int"},
+    "invoice": {"invoice_id": "str", "amount": "int", "status": "str"}
+  },
+  "strings": {
+    "plan": ["basic", "pro", "enterprise"],
+    "customer": ["acme", "globex", "initech"],
+    "status": ["open", "paid", "void"],
+    "region": ["EU", "US"],
+    "run_date": ["2026-09-26", "2026-10-01"]
+  },
+  "ints": {
+    "amount": [0, 500000], "days_late": [0, 120], "tax": [0, 50000], "overdue": [0, 50], "owed": [0, 900000]
+  },
+  "recipients": {"slack": ["#finance", "#collections"], "email": ["finance@corp.example"],
+                 "sms": ["+15550199"]}
+}
