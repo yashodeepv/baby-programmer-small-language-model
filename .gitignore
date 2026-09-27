@@ -13,3 +13,6 @@ checkpoints/
 data/comp_corpus.txt
 data/comp_shapes.json
 data/*.jsonl
+
+# Training logs
+logs/

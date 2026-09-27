@@ -181,3 +181,36 @@ carries no output, because the call never returned.
 3. End-to-end evaluation: English → both models → IR2 → replay the stored scenarios
 4. Code generation: IR2 → a Java project, checked against `sim` on every scenario
 5. A flowchart editor over the JSON form
+
+## M1 proof of concept (temporary BERT encoder)
+
+`flow/m1/` is the flow encoder. Its text encoder sits behind one interface
+(`encoder.py`); the POC fine-tunes pretrained `bert-base-cased` there as a
+temporary stand-in, to be replaced by our own encoder trained from scratch.
+
+```bash
+.venv/bin/python -m flow.m1.train --data data/flow_book.jsonl --out checkpoints/m1_poc_bert --epochs 5
+```
+
+First run: 3,745 training flows from the book, 5 epochs, 58 minutes on an
+Apple M5. "End to end" means the predicted flowchart, given correct step
+logic, passes the checker and reproduces every stored scenario.
+
+| Split | kinds | edges | copies | spans | end to end |
+|---|---:|---:|---:|---:|---:|
+| val (seen wording and domains) | 86.2% | 85.7% | 82.0% | 67.7% | **61.4%** |
+| catalog (logistics, never seen) | 59.1% | 65.9% | 51.0% | 40.3% | 34.6% |
+| style (wording never seen) | 7.0% | 36.0% | 20.2% | 9.9% | **1.6%** |
+
+On val, chapters 1–2 are at 100% end to end and chapter 3 at 90%, but the
+long flows of chapters 6–7 are near 15%.
+
+Unseen wording collapses because the model learned **template shortcuts**,
+not the language: in training, `x = y` always meant a saved field or a call
+argument, so style 2's `compute total = ...` is read as a save. "stop there"
+resembles a branch's "stop", so an extra end step is predicted. BERT's
+English doesn't help when the templates offer an easier cue. Each flow is
+also rendered in a single style, so the model can recognise the style from
+the first sentence. The fix belongs in the data: mix wordings within a flow,
+add more wordings per construct, and hold out individual wordings rather
+than a whole style.
