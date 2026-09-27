@@ -48,6 +48,7 @@ code generation yet.
 | `gen/build.py` | builds the corpus: sample → check → cover → render → label |
 | `spec/LANGUAGE.md` | **Baby Spec**: the system spec language an analyst writes and baby-programmer reads |
 | `spec/examples/` | example system specs |
+| `spec/compile.py` | spec → IR2 flows, or line-numbered errors (`python3.11 -m flow.spec check FILE`) |
 | `examples/` | hand-written flows, each with scenarios |
 | `tests/` | unit tests |
 

@@ -462,11 +462,17 @@ name, qualify it: `input.status`, `charge.status`.
 ## 9. Validity rules
 
 A spec is valid when every rule below holds. baby-programmer rejects an
-invalid spec with the rule's name and line number, so an analyst can fix it.
+invalid spec with the rule's name and line number, so an analyst can fix it. Every
+error in a spec is reported in one pass, not just the first.
+
+```bash
+python3.11 -m flow.spec check system.spec.md
+```
 
 | Rule | Meaning |
 |---|---|
 | `layout` | the first line is `Spec: baby-spec/0.1`; one `# System`; section headings as in §2 |
+| `syntax` | every step, declaration and exact expression follows its grammar |
 | `unique-names` | system, flow, entity, service operation, compute and var names are unique where they're declared |
 | `known-type` | every type is from §4, or a declared entity |
 | `known-service` | every `Call` names a declared service operation |
